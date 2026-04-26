@@ -29,11 +29,44 @@ const App = () => {
     loadData();
   }, []);
 
+  // Auto-save to localStorage
+  useEffect(() => {
+    if (Object.keys(visitorStickers).length > 0) {
+      localStorage.setItem('visitor_collection', JSON.stringify(visitorStickers));
+    }
+  }, [visitorStickers]);
+
   const loadData = async () => {
     try {
       setLoading(true);
       const data = await fetchStickerData();
       setStickers(data);
+      
+      // Initialize visitor collection with data from the Google Sheet
+      const initialCollection = {};
+      data.forEach(s => {
+        if (s.owned) {
+          initialCollection[`${s.team}-${s.number}`] = { 
+            team: s.team, 
+            number: s.number, 
+            owned: true, 
+            duplicated: s.duplicated || 0 
+          };
+        }
+      });
+      
+      // Merge with localStorage if it exists, or just use initial
+      const saved = localStorage.getItem('visitor_collection');
+      if (saved) {
+        try {
+          const parsedSaved = JSON.parse(saved);
+          setVisitorStickers({ ...initialCollection, ...parsedSaved });
+        } catch (e) {
+          setVisitorStickers(initialCollection);
+        }
+      } else {
+        setVisitorStickers(initialCollection);
+      }
     } catch (error) {
       console.error('Failed to load stickers:', error);
     } finally {
