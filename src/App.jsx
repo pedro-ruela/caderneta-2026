@@ -14,6 +14,8 @@ const App = () => {
   const [stickers, setStickers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('match'); // Default to Match/Trade
+  const [pricePerPack, setPricePerPack] = useState(1.20);
+  const [stickersPerPack, setStickersPerPack] = useState(7);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   
@@ -290,6 +292,16 @@ const App = () => {
           >
             <Copy className="w-4 h-4" />
             Available Duplicates
+          </button>
+          <button 
+            onClick={() => setActiveTab('investment')}
+            className={cn(
+              "px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2",
+              activeTab === 'investment' ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Trophy className="w-4 h-4" />
+            Investimento
           </button>
         </div>
 
@@ -596,7 +608,74 @@ const App = () => {
                 </div>
               )}
             </motion.div>
-          ) : (
+          ) : activeTab === 'inventory' ? (
+            <motion.div
+              key="inventory"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-6"
+            >
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input 
+                    type="text" 
+                    placeholder="Search team or number..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-secondary/50 border border-white/5 rounded-xl py-3 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                  />
+                </div>
+                <select 
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="bg-secondary/50 border border-white/5 rounded-xl px-4 py-3 outline-none text-sm font-medium"
+                >
+                  <option value="all">All Stickers</option>
+                  <option value="owned">Owned</option>
+                  <option value="missing">Missing</option>
+                  <option value="duplicated">Duplicated</option>
+                </select>
+              </div>
+
+              {loading ? (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                  {[...Array(24)].map((_, i) => (
+                    <div key={i} className="aspect-[3/4] bg-secondary animate-pulse rounded-xl" />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                  {filteredStickers.map((s) => {
+                    const visitorData = visitorStickers[`${s.team}-${s.number}`];
+                    const isOwned = !!visitorData;
+                    const dups = visitorData?.duplicated || 0;
+
+                    return (
+                      <div 
+                        key={s.id}
+                        className={cn(
+                          "aspect-[3/4] p-2 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all relative overflow-hidden",
+                          isOwned 
+                            ? "bg-green-500/10 border-green-500/30 text-green-400" 
+                            : "bg-secondary/50 border-white/5 text-muted-foreground"
+                        )}
+                      >
+                        <span className="text-[10px] font-black tracking-tighter opacity-70">{s.team}</span>
+                        <span className="text-lg font-black leading-none">{s.number}</span>
+                        {dups > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-lg">
+                            +{dups}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </motion.div>
+          ) : activeTab === 'duplicates' ? (
             <motion.div
               key="duplicates"
               initial={{ opacity: 0, scale: 0.95 }}
@@ -623,6 +702,106 @@ const App = () => {
                       <span className="text-[9px] font-bold bg-primary/10 px-2 py-0.5 rounded-full text-primary">+{v.duplicated}</span>
                     </div>
                   ))}
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="investment"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-8"
+            >
+              <div className="grid md:grid-cols-3 gap-6">
+                <div className="glass p-6 rounded-3xl border border-white/5 space-y-4">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Configuração</h4>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-bold block mb-2">Preço por Saqueta (€)</label>
+                      <input 
+                        type="number" 
+                        step="0.05"
+                        value={pricePerPack}
+                        onChange={(e) => setPricePerPack(parseFloat(e.target.value) || 0)}
+                        className="w-full bg-secondary/50 border border-white/5 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold block mb-2">Stickers por Saqueta</label>
+                      <input 
+                        type="number" 
+                        value={stickersPerPack}
+                        onChange={(e) => setStickersPerPack(parseInt(e.target.value) || 1)}
+                        className="w-full bg-secondary/50 border border-white/5 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="md:col-span-2 grid sm:grid-cols-2 gap-4">
+                  {[
+                    { 
+                      label: 'Total Gasto (Est.)', 
+                      value: `${((stats.owned + stats.duplicated) / stickersPerPack * pricePerPack).toFixed(2)}€`, 
+                      desc: 'Com base nos stickers que tens',
+                      color: 'text-primary' 
+                    },
+                    { 
+                      label: 'Saquetas Compradas', 
+                      value: Math.ceil((stats.owned + stats.duplicated) / stickersPerPack), 
+                      desc: 'Estimativa total',
+                      color: 'text-blue-400' 
+                    },
+                    { 
+                      label: 'Saquetas em Falta', 
+                      value: Math.ceil(stats.missing / stickersPerPack), 
+                      desc: 'Melhor cenário (sem duplas)',
+                      color: 'text-orange-400' 
+                    },
+                    { 
+                      label: 'Custo p/ Completar', 
+                      value: `${(Math.ceil(stats.missing / stickersPerPack) * pricePerPack).toFixed(2)}€`, 
+                      desc: 'Investimento mínimo necessário',
+                      color: 'text-green-400' 
+                    },
+                  ].map(item => (
+                    <div key={item.label} className="glass p-6 rounded-3xl border border-white/5 space-y-1">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{item.label}</p>
+                      <p className={cn("text-3xl font-black", item.color)}>{item.value}</p>
+                      <p className="text-[10px] text-muted-foreground italic">{item.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="glass p-8 rounded-3xl border border-white/5">
+                <h3 className="text-xl font-black mb-6 flex items-center gap-2">
+                  <RefreshCw className="w-5 h-5 text-primary" />
+                  Análise de Eficiência
+                </h3>
+                <div className="grid md:grid-cols-3 gap-8">
+                  <div className="space-y-2">
+                    <p className="text-sm font-bold">Taxa de Duplicados</p>
+                    <div className="text-3xl font-black text-primary">
+                      {((stats.duplicated / (stats.owned + stats.duplicated || 1)) * 100).toFixed(1)}%
+                    </div>
+                    <p className="text-xs text-muted-foreground">Dos stickers que compraste, estes são repetidos.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-bold">Valor em Trocas</p>
+                    <div className="text-3xl font-black text-green-400">
+                      {((stats.duplicated / stickersPerPack) * pricePerPack).toFixed(2)}€
+                    </div>
+                    <p className="text-xs text-muted-foreground">Valor "preso" em duplicados que podes trocar.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-bold">Stickers p/ Saqueta Real</p>
+                    <div className="text-3xl font-black text-blue-400">
+                      {((stats.owned / (Math.ceil((stats.owned + stats.duplicated) / stickersPerPack) || 1))).toFixed(1)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Média de cromos novos por cada saqueta.</p>
+                  </div>
                 </div>
               </div>
             </motion.div>
