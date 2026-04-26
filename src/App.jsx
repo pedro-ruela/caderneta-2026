@@ -83,18 +83,29 @@ const App = () => {
     }
   };
 
-  const stats = useMemo(() => {
+  const ownerStats = useMemo(() => {
+    const total = stickers.length;
+    if (total === 0) return { total: 0, uniqueOwned: 0, totalOwned: 0, missing: 0, duplicated: 0, perc: 0 };
+    
+    const uniqueOwned = stickers.filter(s => s.owned).length;
+    const duplicatedCount = stickers.reduce((acc, s) => acc + s.duplicated, 0);
+    const totalOwned = uniqueOwned + duplicatedCount;
+    const missing = total - uniqueOwned;
+    const perc = ((uniqueOwned / total) * 100).toFixed(1);
+    
+    return { total, uniqueOwned, totalOwned, missing, duplicated: duplicatedCount, perc };
+  }, [stickers]);
+
+  const visitorStats = useMemo(() => {
     const total = stickers.length;
     if (total === 0) return { total: 0, uniqueOwned: 0, totalOwned: 0, missing: 0, duplicated: 0, perc: 0 };
     
     const uniqueOwned = Object.keys(visitorStickers).length;
     const duplicatedCount = Object.values(visitorStickers).reduce((acc, s) => acc + s.duplicated, 0);
     const totalOwned = uniqueOwned + duplicatedCount;
-    
-    const missing = total - uniqueOwned;
     const perc = ((uniqueOwned / total) * 100).toFixed(1);
     
-    return { total, uniqueOwned, totalOwned, missing, duplicated: duplicatedCount, perc };
+    return { total, uniqueOwned, totalOwned, duplicated: duplicatedCount, perc };
   }, [stickers, visitorStickers]);
 
   const filteredStickers = useMemo(() => {
@@ -258,11 +269,14 @@ const App = () => {
 
           <div className="flex items-center gap-6">
             <div className="hidden sm:flex flex-col items-end">
-              <span className="text-2xl font-black text-primary">{stats.perc}%</span>
-              <div className="w-32 h-1.5 bg-secondary rounded-full mt-1 overflow-hidden">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Francisco's Progress</span>
+                <span className="text-xl font-black text-primary">{ownerStats.perc}%</span>
+              </div>
+              <div className="w-32 h-1.5 bg-secondary rounded-full overflow-hidden">
                 <motion.div 
                   initial={{ width: 0 }}
-                  animate={{ width: `${stats.perc}%` }}
+                  animate={{ width: `${ownerStats.perc}%` }}
                   className="h-full bg-primary"
                 />
               </div>
@@ -282,10 +296,10 @@ const App = () => {
         {/* Stats Grid */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Total Stickers', value: stats.total, icon: LayoutGrid, color: 'text-blue-400' },
-            { label: 'Owned', value: stats.totalOwned, icon: CheckCircle2, color: 'text-green-400' },
-            { label: 'Missing', value: stats.missing, icon: XCircle, color: 'text-red-400' },
-            { label: 'Duplicated', value: stats.duplicated, icon: Copy, color: 'text-primary' },
+            { label: 'Total Stickers', value: ownerStats.total, icon: LayoutGrid, color: 'text-blue-400' },
+            { label: "Francisco's Owned", value: ownerStats.totalOwned, icon: CheckCircle2, color: 'text-green-400' },
+            { label: "Francisco's Missing", value: ownerStats.missing, icon: XCircle, color: 'text-red-400' },
+            { label: 'Duplicated for Trade', value: ownerStats.duplicated, icon: Copy, color: 'text-primary' },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
@@ -472,11 +486,26 @@ const App = () => {
 
                 {/* Match Results */}
                 <div className="glass p-6 rounded-2xl space-y-6 border border-white/5">
-                  <div className="flex justify-between items-center">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <h3 className="text-lg font-bold flex items-center gap-2">
                       <RefreshCw className="w-5 h-5 text-primary" />
                       Comparison Engine
                     </h3>
+                    
+                    {Object.keys(visitorStickers).length > 0 && (
+                      <div className="flex items-center gap-4 bg-white/5 px-4 py-2 rounded-xl border border-white/10">
+                        <div className="text-center">
+                          <p className="text-[8px] font-black uppercase text-muted-foreground">Your Progress</p>
+                          <p className="text-sm font-black text-primary">{visitorStats.perc}%</p>
+                        </div>
+                        <div className="w-[1px] h-6 bg-white/10" />
+                        <div className="text-center">
+                          <p className="text-[8px] font-black uppercase text-muted-foreground">Stickers in Hand</p>
+                          <p className="text-sm font-black text-white">{visitorStats.totalOwned}</p>
+                        </div>
+                      </div>
+                    )}
+
                     <button 
                       onClick={copyTradeSummary}
                       disabled={Object.keys(visitorStickers).length === 0}
@@ -787,25 +816,25 @@ const App = () => {
                   {[
                     { 
                       label: 'Total Gasto (Est.)', 
-                      value: `${(stats.totalOwned / stickersPerPack * pricePerPack).toFixed(2)}€`, 
+                      value: `${(ownerStats.totalOwned / stickersPerPack * pricePerPack).toFixed(2)}€`, 
                       desc: 'Com base nos stickers que tens',
                       color: 'text-primary' 
                     },
                     { 
                       label: 'Saquetas Compradas', 
-                      value: Math.ceil(stats.totalOwned / stickersPerPack), 
+                      value: Math.ceil(ownerStats.totalOwned / stickersPerPack), 
                       desc: 'Estimativa total',
                       color: 'text-blue-400' 
                     },
                     { 
                       label: 'Saquetas em Falta', 
-                      value: Math.ceil(stats.missing / stickersPerPack), 
+                      value: Math.ceil(ownerStats.missing / stickersPerPack), 
                       desc: 'Melhor cenário (sem duplas)',
                       color: 'text-orange-400' 
                     },
                     { 
                       label: 'Custo p/ Completar', 
-                      value: `${(Math.ceil(stats.missing / stickersPerPack) * pricePerPack).toFixed(2)}€`, 
+                      value: `${(Math.ceil(ownerStats.missing / stickersPerPack) * pricePerPack).toFixed(2)}€`, 
                       desc: 'Investimento mínimo necessário',
                       color: 'text-green-400' 
                     },
@@ -828,21 +857,21 @@ const App = () => {
                   <div className="space-y-2">
                     <p className="text-sm font-bold">Taxa de Duplicados</p>
                     <div className="text-3xl font-black text-primary">
-                      {((stats.duplicated / (stats.totalOwned || 1)) * 100).toFixed(1)}%
+                      {((ownerStats.duplicated / (ownerStats.totalOwned || 1)) * 100).toFixed(1)}%
                     </div>
                     <p className="text-xs text-muted-foreground">Dos stickers que compraste, estes são repetidos.</p>
                   </div>
                   <div className="space-y-2">
                     <p className="text-sm font-bold">Valor em Trocas</p>
                     <div className="text-3xl font-black text-green-400">
-                      {((stats.duplicated / stickersPerPack) * pricePerPack).toFixed(2)}€
+                      {((ownerStats.duplicated / stickersPerPack) * pricePerPack).toFixed(2)}€
                     </div>
                     <p className="text-xs text-muted-foreground">Valor "preso" em duplicados que podes trocar.</p>
                   </div>
                   <div className="space-y-2">
                     <p className="text-sm font-bold">Stickers p/ Saqueta Real</p>
                     <div className="text-3xl font-black text-blue-400">
-                      {((stats.uniqueOwned / (Math.ceil(stats.totalOwned / stickersPerPack) || 1))).toFixed(1)}
+                      {((ownerStats.uniqueOwned / (Math.ceil(ownerStats.totalOwned / stickersPerPack) || 1))).toFixed(1)}
                     </div>
                     <p className="text-xs text-muted-foreground">Média de cromos novos por cada saqueta.</p>
                   </div>
