@@ -43,26 +43,30 @@ const App = () => {
     const total = stickers.length;
     if (total === 0) return { total: 0, owned: 0, missing: 0, duplicated: 0, perc: 0 };
     
-    const owned = stickers.filter(s => s.owned).length;
+    const owned = Object.keys(visitorStickers).length;
     const missing = total - owned;
-    const duplicatedCount = stickers.reduce((acc, s) => acc + s.duplicated, 0);
+    const duplicatedCount = Object.values(visitorStickers).reduce((acc, s) => acc + s.duplicated, 0);
     const perc = ((owned / total) * 100).toFixed(1);
     
     return { total, owned, missing, duplicated: duplicatedCount, perc };
-  }, [stickers]);
+  }, [stickers, visitorStickers]);
 
   const filteredStickers = useMemo(() => {
     return stickers.filter(s => {
+      const visitorData = visitorStickers[`${s.team}-${s.number}`];
+      const isOwned = !!visitorData;
+      const hasDups = visitorData?.duplicated > 0;
+
       const matchesSearch = s.number.includes(searchQuery) || s.team.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = 
         filterStatus === 'all' || 
-        (filterStatus === 'owned' && s.owned) || 
-        (filterStatus === 'missing' && !s.owned) || 
-        (filterStatus === 'duplicated' && s.duplicated > 0);
+        (filterStatus === 'owned' && isOwned) || 
+        (filterStatus === 'missing' && !isOwned) || 
+        (filterStatus === 'duplicated' && hasDups);
       
       return matchesSearch && matchesStatus;
     });
-  }, [stickers, searchQuery, filterStatus]);
+  }, [stickers, searchQuery, filterStatus, visitorStickers]);
 
   const parseTextToStickers = (text) => {
     const regex = /([A-Z]{3})\s*(\d+)/gi;
@@ -564,25 +568,31 @@ const App = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-                  {filteredStickers.map((s) => (
-                    <div 
-                      key={s.id}
-                      className={cn(
-                        "aspect-[3/4] p-2 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all relative overflow-hidden",
-                        s.owned 
-                          ? "bg-green-500/10 border-green-500/30 text-green-400" 
-                          : "bg-secondary/50 border-white/5 text-muted-foreground"
-                      )}
-                    >
-                      <span className="text-[10px] font-black tracking-tighter opacity-70">{s.team}</span>
-                      <span className="text-lg font-black leading-none">{s.number}</span>
-                      {s.duplicated > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-lg">
-                          +{s.duplicated}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                  {filteredStickers.map((s) => {
+                    const visitorData = visitorStickers[`${s.team}-${s.number}`];
+                    const isOwned = !!visitorData;
+                    const dups = visitorData?.duplicated || 0;
+
+                    return (
+                      <div 
+                        key={s.id}
+                        className={cn(
+                          "aspect-[3/4] p-2 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all relative overflow-hidden",
+                          isOwned 
+                            ? "bg-green-500/10 border-green-500/30 text-green-400" 
+                            : "bg-secondary/50 border-white/5 text-muted-foreground"
+                        )}
+                      >
+                        <span className="text-[10px] font-black tracking-tighter opacity-70">{s.team}</span>
+                        <span className="text-lg font-black leading-none">{s.number}</span>
+                        {dups > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-lg">
+                            +{dups}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </motion.div>
@@ -606,11 +616,11 @@ const App = () => {
                 </div>
                 
                 <div className="flex flex-wrap justify-center gap-3 max-w-4xl mx-auto">
-                  {stickers.filter(s => s.duplicated > 0).map(s => (
-                    <div key={`dup-${s.id}`} className="px-4 py-3 bg-secondary/50 border border-white/10 rounded-2xl flex flex-col items-center gap-1 min-w-[80px]">
-                      <span className="text-[10px] font-black text-muted-foreground">{s.team}</span>
-                      <span className="text-xl font-black text-primary">{s.number}</span>
-                      <span className="text-[9px] font-bold bg-primary/10 px-2 py-0.5 rounded-full text-primary">+{s.duplicated}</span>
+                  {Object.values(visitorStickers).filter(v => v.duplicated > 0).map(v => (
+                    <div key={`dup-${v.team}-${v.number}`} className="px-4 py-3 bg-secondary/50 border border-white/10 rounded-2xl flex flex-col items-center gap-1 min-w-[80px]">
+                      <span className="text-[10px] font-black text-muted-foreground">{v.team}</span>
+                      <span className="text-xl font-black text-primary">{v.number}</span>
+                      <span className="text-[9px] font-bold bg-primary/10 px-2 py-0.5 rounded-full text-primary">+{v.duplicated}</span>
                     </div>
                   ))}
                 </div>
