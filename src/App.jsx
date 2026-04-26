@@ -1,7 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Download, Upload, Share2, CheckCircle2, XCircle, Copy, RefreshCw, Trophy, Users, LayoutGrid } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import {
+  Search, Download, Upload, Share2, CheckCircle2, XCircle,
+  Copy, RefreshCw, Trophy, Users, LayoutGrid, AlertCircle,
+  BarChart3, Trash2, TrendingUp, GitFork, BookOpen, CheckSquare,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { fetchStickerData, TEAM_NAMES } from './services/dataService';
+import { fetchStickerData } from './services/dataService';
+import { config } from './config';
+import translations from './i18n';
 import Papa from 'papaparse';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -10,136 +16,266 @@ function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+const getInitialLang = () => {
+  const saved = localStorage.getItem('lang');
+  if (saved === 'en' || saved === 'pt') return saved;
+  return navigator.language?.startsWith('pt') ? 'pt' : 'en';
+};
+
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+const LangToggle = ({ lang, onChangeLang }) => (
+  <div role="group" aria-label="Language / Idioma" className="flex p-0.5 bg-white/5 rounded-lg border border-white/10">
+    <button
+      onClick={() => onChangeLang('pt')}
+      aria-pressed={lang === 'pt'}
+      aria-label="Português"
+      className={cn(
+        'px-2 py-1 rounded text-base leading-none transition-all',
+        lang === 'pt' ? 'bg-card shadow-sm' : 'opacity-40 hover:opacity-70'
+      )}
+    >
+      🇵🇹
+    </button>
+    <button
+      onClick={() => onChangeLang('en')}
+      aria-pressed={lang === 'en'}
+      aria-label="English"
+      className={cn(
+        'px-2 py-1 rounded text-base leading-none transition-all',
+        lang === 'en' ? 'bg-card shadow-sm' : 'opacity-40 hover:opacity-70'
+      )}
+    >
+      🇬🇧
+    </button>
+  </div>
+);
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
 const App = () => {
-  const [stickers, setStickers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('match'); // Default to Match/Trade
-  const [pricePerPack, setPricePerPack] = useState(1.20);
-  const [stickersPerPack, setStickersPerPack] = useState(7);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  
-  // Visitor Data (Key: "TEAM-NO", Value: { team, number, owned, duplicated })
+  const [stickers, setStickers]               = useState([]);
+  const [loading, setLoading]                 = useState(true);
+  const [error, setError]                     = useState(null);
+  const [lang, setLang]                       = useState(getInitialLang);
+  const [activeTab, setActiveTab]             = useState('match');
+  const [inventoryView, setInventoryView]     = useState('grid');
+  const [pricePerPack, setPricePerPack]       = useState(config.defaultPricePerPack);
+  const [stickersPerPack, setStickersPerPack] = useState(config.defaultStickersPerPack);
+  const [searchQuery, setSearchQuery]         = useState('');
+  const [filterStatus, setFilterStatus]       = useState('all');
   const [visitorStickers, setVisitorStickers] = useState({});
-  const [pastedData, setPastedData] = useState('');
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
+  const [packInput, setPackInput]             = useState(() => localStorage.getItem('pack_input') || '');
+  const [stuckFromPack, setStuckFromPack]     = useState(() => new Set());
+  const [pastedData, setPastedData]           = useState('');
+  const [showToast, setShowToast]             = useState(false);
+  const [toastMessage, setToastMessage]       = useState('');
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const t = translations[lang];
 
-  // Auto-save to localStorage
-  useEffect(() => {
-    if (Object.keys(visitorStickers).length > 0) {
-      localStorage.setItem('visitor_collection', JSON.stringify(visitorStickers));
-    }
-  }, [visitorStickers]);
+  const handleLangChange = (l) => {
+    setLang(l);
+    localStorage.setItem('lang', l);
+  };
+
+  // ── Data loading ────────────────────────────────────────────────────────────
 
   const loadData = async () => {
     try {
-      setLoading(true);
       const data = await fetchStickerData();
-      setStickers(data);
-      
-      // Initialize visitor collection with data from the Google Sheet
+
       const initialCollection = {};
       let sheetHasData = false;
 
       data.forEach(s => {
         if (s.owned) {
           sheetHasData = true;
-          initialCollection[`${s.team}-${s.number}`] = { 
-            team: s.team, 
-            number: s.number, 
-            owned: true, 
-            duplicated: s.duplicated || 0 
+          initialCollection[s.id] = {
+            team: s.team, number: s.number, owned: true, duplicated: s.duplicated || 0,
           };
         }
       });
-      
-      // If the sheet has data, it is the master source. 
-      // We only use localStorage as a fallback if the sheet is empty (e.g. new user).
+
       const saved = localStorage.getItem('visitor_collection');
       if (saved && !sheetHasData) {
         try {
-          const parsedSaved = JSON.parse(saved);
-          setVisitorStickers(parsedSaved);
-        } catch (e) {
+          setVisitorStickers(JSON.parse(saved));
+        } catch {
           setVisitorStickers(initialCollection);
         }
       } else {
-        // Use the sheet data (Master)
         setVisitorStickers(initialCollection);
-        // Sync local storage with the master sheet immediately to clean up old junk
         if (sheetHasData) {
           localStorage.setItem('visitor_collection', JSON.stringify(initialCollection));
         }
       }
-    } catch (error) {
-      console.error('Failed to load stickers:', error);
-    } finally {
+
+      setStickers(data);
+      setError(null);
+      setLoading(false);
+    } catch (err) {
+      console.error('Failed to load stickers:', err);
+      setError(true);
       setLoading(false);
     }
   };
 
+  const retryLoad = () => {
+    setLoading(true);
+    setError(null);
+    loadData();
+  };
+
+  useEffect(() => {
+    async function init() { await loadData(); }
+    init();
+  }, []);
+
+  useEffect(() => {
+    if (Object.keys(visitorStickers).length > 0) {
+      localStorage.setItem('visitor_collection', JSON.stringify(visitorStickers));
+    }
+  }, [visitorStickers]);
+
+
+  // ── Toast helper ─────────────────────────────────────────────────────────────
+
+  const showToastMessage = (msg) => {
+    setToastMessage(msg);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
+  };
+
+  // ── Derived stats ─────────────────────────────────────────────────────────────
+
   const ownerStats = useMemo(() => {
     const total = stickers.length;
     if (total === 0) return { total: 0, uniqueOwned: 0, totalOwned: 0, missing: 0, duplicated: 0, perc: 0 };
-    
-    const uniqueOwned = stickers.filter(s => s.owned).length;
+    const uniqueOwned    = stickers.filter(s => s.owned).length;
     const duplicatedCount = stickers.reduce((acc, s) => acc + s.duplicated, 0);
-    const totalOwned = uniqueOwned + duplicatedCount;
-    const missing = total - uniqueOwned;
-    const perc = ((uniqueOwned / total) * 100).toFixed(1);
-    
+    const totalOwned     = uniqueOwned + duplicatedCount;
+    const missing        = total - uniqueOwned;
+    const perc           = ((uniqueOwned / total) * 100).toFixed(1);
     return { total, uniqueOwned, totalOwned, missing, duplicated: duplicatedCount, perc };
   }, [stickers]);
 
   const visitorStats = useMemo(() => {
-    const total = stickers.length;
-    if (total === 0) return { total: 0, uniqueOwned: 0, totalOwned: 0, missing: 0, duplicated: 0, perc: 0 };
-    
-    const uniqueOwned = Object.keys(visitorStickers).length;
+    const total        = stickers.length;
+    if (total === 0) return { total: 0, uniqueOwned: 0, totalOwned: 0, duplicated: 0, perc: 0 };
+    const uniqueOwned  = Object.keys(visitorStickers).length;
     const duplicatedCount = Object.values(visitorStickers).reduce((acc, s) => acc + s.duplicated, 0);
-    const totalOwned = uniqueOwned + duplicatedCount;
-    const perc = ((uniqueOwned / total) * 100).toFixed(1);
-    
+    const totalOwned   = uniqueOwned + duplicatedCount;
+    const perc         = ((uniqueOwned / total) * 100).toFixed(1);
     return { total, uniqueOwned, totalOwned, duplicated: duplicatedCount, perc };
   }, [stickers, visitorStickers]);
 
+  const teamProgress = useMemo(() => {
+    const teams = {};
+    stickers.forEach(s => {
+      if (!teams[s.team]) teams[s.team] = { total: 0, owned: 0 };
+      teams[s.team].total++;
+      if (visitorStickers[s.id]) teams[s.team].owned++;
+    });
+    return Object.entries(teams)
+      .map(([team, stats]) => ({ team, ...stats, perc: ((stats.owned / stats.total) * 100).toFixed(0) }))
+      .sort((a, b) => parseFloat(b.perc) - parseFloat(a.perc));
+  }, [stickers, visitorStickers]);
+
+  const ownerDuplicates = useMemo(() => stickers.filter(s => s.duplicated > 0), [stickers]);
+
   const filteredStickers = useMemo(() => {
     return stickers.filter(s => {
-      const visitorData = visitorStickers[`${s.team}-${s.number}`];
-      const isOwned = !!visitorData;
-      const hasDups = visitorData?.duplicated > 0;
-
-      const matchesSearch = s.number.includes(searchQuery) || s.team.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus = 
-        filterStatus === 'all' || 
-        (filterStatus === 'owned' && isOwned) || 
-        (filterStatus === 'missing' && !isOwned) || 
+      const vd       = visitorStickers[s.id];
+      const isOwned  = !!vd;
+      const hasDups  = vd?.duplicated > 0;
+      const matchSearch = s.number.includes(searchQuery) || s.team.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchStatus =
+        filterStatus === 'all' ||
+        (filterStatus === 'owned'      && isOwned) ||
+        (filterStatus === 'missing'    && !isOwned) ||
         (filterStatus === 'duplicated' && hasDups);
-      
-      return matchesSearch && matchesStatus;
+      return matchSearch && matchStatus;
     });
   }, [stickers, searchQuery, filterStatus, visitorStickers]);
+
+  // ── Sticking Guide ────────────────────────────────────────────────────────────
+
+  const parsedPackStickers = useMemo(() => {
+    if (!packInput.trim()) return [];
+    const regex = /([A-Za-z]{3})\s*(\d+)/g;
+    let match;
+    const ids = new Set();
+    while ((match = regex.exec(packInput)) !== null) {
+      ids.add(`${match[1].toUpperCase()}-${match[2]}`);
+    }
+    return stickers.filter(s => ids.has(s.id));
+  }, [packInput, stickers]);
+
+  const stickingGuidePages = useMemo(() => {
+    const remaining = parsedPackStickers.filter(s => !stuckFromPack.has(s.id));
+    const withPage    = remaining.filter(s => s.page);
+    const withoutPage = remaining.filter(s => !s.page);
+    const pageMap = {};
+    withPage.forEach(s => {
+      if (!pageMap[s.page]) pageMap[s.page] = { page: s.page, stickers: [] };
+      pageMap[s.page].stickers.push(s);
+    });
+    const sorted = Object.values(pageMap).sort((a, b) => {
+      const na = parseInt(a.page), nb = parseInt(b.page);
+      return (!isNaN(na) && !isNaN(nb)) ? na - nb : String(a.page).localeCompare(String(b.page));
+    });
+    if (withoutPage.length > 0) sorted.push({ page: null, stickers: withoutPage });
+    return sorted;
+  }, [parsedPackStickers, stuckFromPack]);
+
+  const unstuckCount = useMemo(
+    () => parsedPackStickers.filter(s => !stuckFromPack.has(s.id)).length,
+    [parsedPackStickers, stuckFromPack]
+  );
+
+  const handlePackInput = (text) => {
+    setPackInput(text);
+    localStorage.setItem('pack_input', text);
+  };
+
+  const markStickerStuck = (id) => {
+    setStuckFromPack(prev => new Set([...prev, id]));
+  };
+
+  const markPageStuck = (pageStickers) => {
+    setStuckFromPack(prev => {
+      const next = new Set(prev);
+      pageStickers.forEach(s => next.add(s.id));
+      return next;
+    });
+  };
+
+  const markAllStuck = () => {
+    setStuckFromPack(new Set(parsedPackStickers.map(s => s.id)));
+  };
+
+  const resetPack = () => {
+    setPackInput('');
+    setStuckFromPack(new Set());
+    localStorage.removeItem('pack_input');
+    showToastMessage(t.toastStuckCleared);
+  };
+
+  // ── Collection actions ────────────────────────────────────────────────────────
 
   const parseTextToStickers = (text) => {
     const regex = /([A-Z]{3})\s*(\d+)/gi;
     let match;
     const result = {};
-    
     while ((match = regex.exec(text)) !== null) {
-      const team = match[1].toUpperCase();
+      const team   = match[1].toUpperCase();
       const number = match[2];
-      const id = `${team}-${number}`;
-      
-      if (result[id]) {
-        result[id].duplicated += 1;
-      } else {
-        result[id] = { team, number, owned: true, duplicated: 0 };
-      }
+      const id     = `${team}-${number}`;
+      if (result[id]) result[id].duplicated += 1;
+      else result[id] = { team, number, owned: true, duplicated: 0 };
     }
     return result;
   };
@@ -147,8 +283,7 @@ const App = () => {
   const handlePaste = (e) => {
     const text = e.target.value;
     setPastedData(text);
-    const parsed = parseTextToStickers(text);
-    setVisitorStickers(parsed);
+    setVisitorStickers(parseTextToStickers(text));
   };
 
   const toggleVisitorSticker = (team, number) => {
@@ -156,99 +291,135 @@ const App = () => {
     setVisitorStickers(prev => {
       const next = { ...prev };
       if (next[id]) {
-        if (next[id].duplicated > 0) {
-          next[id].duplicated -= 1;
-        } else {
-          delete next[id];
-        }
+        if (next[id].duplicated > 0) next[id] = { ...next[id], duplicated: next[id].duplicated - 1 };
+        else delete next[id];
       } else {
         next[id] = { team, number, owned: true, duplicated: 0 };
       }
       return next;
     });
-    
-    // Update pasted data text area to reflect changes (optional, but good for sync)
-    // For now we just keep them separate or rebuild from state
+  };
+
+  const clearVisitorCollection = () => {
+    setVisitorStickers({});
+    setPastedData('');
+    localStorage.removeItem('visitor_collection');
+    showToastMessage(t.toastCleared);
   };
 
   const tradeMatches = useMemo(() => {
     const visitorList = Object.values(visitorStickers);
     if (visitorList.length === 0) return { iHaveYouNeed: [], youHaveINeed: [] };
-    
     const youHaveINeed = visitorList.filter(v => {
-      const ownerSticker = stickers.find(s => s.team === v.team && s.number === v.number);
-      return ownerSticker && !ownerSticker.owned;
+      const owner = stickers.find(s => s.id === `${v.team}-${v.number}`);
+      return owner && !owner.owned;
     });
-
-    const iHaveYouNeed = stickers.filter(s => {
-      const isDuplicated = s.duplicated > 0;
-      const visitorHasIt = visitorStickers[`${s.team}-${s.number}`];
-      return isDuplicated && !visitorHasIt;
-    });
-
+    const iHaveYouNeed = stickers.filter(s => s.duplicated > 0 && !visitorStickers[s.id]);
     return { iHaveYouNeed, youHaveINeed };
   }, [stickers, visitorStickers]);
 
   const downloadTemplate = () => {
-    // Requirements: Team, Number, Owned (True/False), Duplicated Qty
-    const data = stickers.map(s => {
-      const visitorData = visitorStickers[`${s.team}-${s.number}`];
-      return {
-        'Team': s.team,
-        'Number': s.number,
-        'Owned': visitorData ? 'TRUE' : 'FALSE',
-        'Duplicated Qty': visitorData ? visitorData.duplicated : 0
-      };
+    const rows = stickers.map(s => {
+      const vd = visitorStickers[s.id];
+      return { Team: s.team, Number: s.number, Page: s.page || '', Owned: vd ? 'TRUE' : 'FALSE', 'Duplicated Qty': vd?.duplicated ?? 0 };
     });
-
-    const csv = Papa.unparse(data);
+    const csv  = Papa.unparse(rows);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute('download', 'world_cup_2026_tracker_template.csv');
+    link.href  = URL.createObjectURL(blob);
+    link.setAttribute('download', 'wc2026_collection.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
-    setToastMessage('Template downloaded! Fill it and upload back.');
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+    showToastMessage(t.toastDownloaded);
   };
 
   const getTradeMessage = () => {
-    const iHave = tradeMatches.iHaveYouNeed.map(s => `${s.team} ${s.number}`).join(', ');
+    const iHave  = tradeMatches.iHaveYouNeed.map(s => `${s.team} ${s.number}`).join(', ');
     const youHave = tradeMatches.youHaveINeed.map(s => `${s.team} ${s.number}`).join(', ');
-    
-    return `Olá! Vi no teu tracker que temos cromos para trocar. 🤝\n\nEu tenho para ti: ${iHave || 'Nenhum neste momento'}\nTu tens para mim: ${youHave || 'Nenhum neste momento'}\n\nVamos falar?`;
+    return t.tradeMessage(iHave, youHave);
   };
 
   const copyTradeSummary = () => {
-    const message = getTradeMessage();
-    navigator.clipboard.writeText(message);
-    setToastMessage('Trade summary copied to clipboard!');
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+    navigator.clipboard.writeText(getTradeMessage());
+    showToastMessage(t.toastTradeCopied);
   };
 
   const shareApp = () => {
     navigator.clipboard.writeText(window.location.href);
-    setToastMessage('Link copied to clipboard!');
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+    showToastMessage(t.toastLinkCopied);
   };
+
+  // ── Screen: Loading ──────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center" aria-busy="true" aria-label={t.loadingMsg}>
+        <div className="text-center space-y-4">
+          <div className="p-4 bg-primary/10 rounded-2xl w-fit mx-auto" aria-hidden="true">
+            <Trophy className="w-8 h-8 text-primary animate-pulse" />
+          </div>
+          <p className="text-sm text-muted-foreground">{t.loadingMsg}</p>
+          <div className="flex gap-1.5 justify-center" aria-hidden="true">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Screen: Error ────────────────────────────────────────────────────────────
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
+        <div className="glass p-8 rounded-3xl border border-destructive/20 text-center space-y-4 max-w-md w-full" role="alert">
+          <div className="p-4 bg-destructive/10 rounded-2xl w-fit mx-auto" aria-hidden="true">
+            <AlertCircle className="w-8 h-8 text-destructive" />
+          </div>
+          <h2 className="text-lg font-bold">{t.failedTitle}</h2>
+          <p className="text-sm text-muted-foreground">{t.failedDesc}</p>
+          <div className="flex items-center justify-center gap-3">
+            <button onClick={retryLoad} className="bg-primary text-primary-foreground font-bold px-6 py-2.5 rounded-xl hover:opacity-90 transition-all focus-visible:ring">
+              {t.tryAgain}
+            </button>
+            <LangToggle lang={lang} onChangeLang={handleLangChange} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Screen: Main ─────────────────────────────────────────────────────────────
+
+  const tabs = [
+    { id: 'match',      icon: RefreshCw,   label: t.tabTrade },
+    { id: 'inventory',  icon: LayoutGrid,  label: t.tabInventory },
+    { id: 'duplicates', icon: Copy,        label: t.tabDuplicates },
+    { id: 'sticking',   icon: BookOpen,    label: t.tabSticking,   badge: unstuckCount > 0 ? unstuckCount : null },
+    { id: 'investment', icon: TrendingUp,  label: t.tabInvestment },
+  ];
 
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-primary/30">
+
+      {/* Skip navigation */}
+      <a href="#main-content" className="skip-link">{t.skipToContent}</a>
+
       {/* Toast */}
       <AnimatePresence>
         {showToast && (
-          <motion.div 
+          <motion.div
+            role="alert"
+            aria-live="assertive"
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
             className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] bg-primary text-primary-foreground px-6 py-3 rounded-full font-bold shadow-2xl flex items-center gap-2"
           >
-            <CheckCircle2 className="w-4 h-4" />
+            <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
             {toastMessage}
           </motion.div>
         )}
@@ -258,48 +429,63 @@ const App = () => {
       <header className="sticky top-0 z-50 glass border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary rounded-xl shadow-lg shadow-primary/20">
+            <div className="p-2 bg-primary rounded-xl shadow-lg shadow-primary/20" aria-hidden="true">
               <Trophy className="w-6 h-6 text-primary-foreground" />
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight">WC 2026 Tracker</h1>
-              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-[0.2em]">Community Edition</p>
+              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-[0.2em]">{t.subtitle}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-6">
-            <div className="hidden sm:flex flex-col items-end">
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex flex-col items-end" aria-label={`${t.ownerProgress}: ${ownerStats.perc}%`}>
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Francisco's Progress</span>
-                <span className="text-xl font-black text-primary">{ownerStats.perc}%</span>
+                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest" aria-hidden="true">{t.ownerProgress}</span>
+                <span className="text-xl font-black text-primary" aria-hidden="true">{ownerStats.perc}%</span>
               </div>
-              <div className="w-32 h-1.5 bg-secondary rounded-full overflow-hidden">
-                <motion.div 
+              <div className="w-32 h-1.5 bg-secondary rounded-full overflow-hidden" role="progressbar" aria-valuenow={ownerStats.perc} aria-valuemin="0" aria-valuemax="100">
+                <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${ownerStats.perc}%` }}
                   className="h-full bg-primary"
                 />
               </div>
             </div>
-            <button 
-              onClick={shareApp}
-              className="p-2 hover:bg-white/5 rounded-full transition-colors relative group"
+
+            <LangToggle lang={lang} onChangeLang={handleLangChange} />
+
+            <a
+              href={config.ownerGitHub}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={t.forkGithub}
+              className="hidden sm:flex items-center gap-2 text-[10px] font-black bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 transition-all"
             >
-              <Share2 className="w-5 h-5" />
-              <span className="absolute -bottom-8 right-0 text-[10px] bg-card px-2 py-1 rounded border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Share Tracker</span>
+              <GitFork className="w-3 h-3" aria-hidden="true" />
+              {t.forkGithub}
+            </a>
+
+            <button
+              onClick={shareApp}
+              aria-label={t.shareTracker}
+              className="p-2 hover:bg-white/5 rounded-full transition-colors"
+            >
+              <Share2 className="w-5 h-5" aria-hidden="true" />
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6 space-y-8">
-        {/* Stats Grid */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <main id="main-content" className="max-w-7xl mx-auto p-6 space-y-8">
+
+        {/* Stats cards */}
+        <section aria-label="Collection statistics" className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Total Stickers', value: ownerStats.total, icon: LayoutGrid, color: 'text-blue-400' },
-            { label: "Francisco's Owned", value: ownerStats.totalOwned, icon: CheckCircle2, color: 'text-green-400' },
-            { label: "Francisco's Missing", value: ownerStats.missing, icon: XCircle, color: 'text-red-400' },
-            { label: 'Duplicated for Trade', value: ownerStats.duplicated, icon: Copy, color: 'text-primary' },
+            { label: t.totalStickers,      value: ownerStats.total,      icon: LayoutGrid,  color: 'text-blue-400' },
+            { label: t.ownerOwned,         value: ownerStats.totalOwned, icon: CheckCircle2, color: 'text-green-400' },
+            { label: t.ownerMissing,       value: ownerStats.missing,    icon: XCircle,      color: 'text-red-400' },
+            { label: t.duplicatesForTrade, value: ownerStats.duplicated, icon: Copy,         color: 'text-primary' },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
@@ -308,7 +494,7 @@ const App = () => {
               transition={{ delay: i * 0.1 }}
               className="glass p-4 rounded-2xl flex items-center gap-4 card-hover border border-white/5"
             >
-              <div className={cn("p-3 rounded-xl bg-white/5", stat.color)}>
+              <div className={cn('p-3 rounded-xl bg-white/5', stat.color)} aria-hidden="true">
                 <stat.icon className="w-6 h-6" />
               </div>
               <div>
@@ -319,128 +505,134 @@ const App = () => {
           ))}
         </section>
 
-        {/* Tabs */}
-        <div className="flex p-1 bg-secondary rounded-xl w-fit">
-          <button 
-            onClick={() => setActiveTab('match')}
-            className={cn(
-              "px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2",
-              activeTab === 'match' ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <RefreshCw className="w-4 h-4" />
-            Trade & Compare
-          </button>
-          <button 
-            onClick={() => setActiveTab('inventory')}
-            className={cn(
-              "px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2",
-              activeTab === 'inventory' ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <LayoutGrid className="w-4 h-4" />
-            Collection Progress
-          </button>
-          <button 
-            onClick={() => setActiveTab('duplicates')}
-            className={cn(
-              "px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2",
-              activeTab === 'duplicates' ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Copy className="w-4 h-4" />
-            Available Duplicates
-          </button>
-          <button 
-            onClick={() => setActiveTab('investment')}
-            className={cn(
-              "px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2",
-              activeTab === 'investment' ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Trophy className="w-4 h-4" />
-            Investimento
-          </button>
+        {/* Tab navigation */}
+        <div role="tablist" aria-label={t.tabsLabel} className="flex flex-wrap p-1 bg-secondary rounded-xl w-fit gap-1">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              role="tab"
+              id={`tab-${tab.id}`}
+              aria-selected={activeTab === tab.id}
+              aria-controls={`panel-${tab.id}`}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                'px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2',
+                activeTab === tab.id ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <tab.icon className="w-4 h-4" aria-hidden="true" />
+              {tab.label}
+              {tab.badge != null && (
+                <span className="bg-primary text-primary-foreground text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none">
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
 
-        {/* Tab Content */}
         <AnimatePresence mode="wait">
-          {activeTab === 'match' ? (
+
+          {/* ── Trade & Compare ──────────────────────────────────────────────── */}
+          {activeTab === 'match' && (
             <motion.div
               key="match"
+              role="tabpanel"
+              id="panel-match"
+              aria-labelledby="tab-match"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
               className="grid lg:grid-cols-3 gap-8"
             >
-              {/* Left Column: Visitor Input */}
               <div className="lg:col-span-2 space-y-6">
+                {/* Your Collection */}
                 <div className="glass p-6 rounded-2xl space-y-6 border border-white/5">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="text-lg font-bold flex items-center gap-2">
-                        <Users className="w-5 h-5 text-primary" />
-                        Your Collection
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        Tell us what you have to find matches.
-                      </p>
+                      <h2 className="text-lg font-bold flex items-center gap-2">
+                        <Users className="w-5 h-5 text-primary" aria-hidden="true" />
+                        {t.yourCollection}
+                      </h2>
+                      <p className="text-sm text-muted-foreground">{t.enterStickers}</p>
                     </div>
-                    <button 
-                      onClick={downloadTemplate}
-                      className="text-[10px] font-black bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 transition-all"
-                    >
-                      <Download className="w-3 h-3" />
-                      DOWNLOAD TEMPLATE
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {Object.keys(visitorStickers).length > 0 && (
+                        <button
+                          onClick={clearVisitorCollection}
+                          aria-label={t.clearAriaLabel}
+                          className="text-[10px] font-black bg-destructive/10 hover:bg-destructive/20 text-destructive px-3 py-1.5 rounded-lg border border-destructive/20 flex items-center gap-2 transition-all"
+                        >
+                          <Trash2 className="w-3 h-3" aria-hidden="true" />
+                          {t.clear}
+                        </button>
+                      )}
+                      <button
+                        onClick={downloadTemplate}
+                        aria-label={t.templateAriaLabel}
+                        className="text-[10px] font-black bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 transition-all"
+                      >
+                        <Download className="w-3 h-3" aria-hidden="true" />
+                        {t.template}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid md:grid-cols-2 gap-6">
+                    {/* Option 1 – paste */}
                     <div className="space-y-3">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Option 1: Manual Paste</label>
-                      <textarea 
-                        placeholder="Type or paste (e.g. ARG 1, ARG 2, BRA 10...)"
+                      <label htmlFor="paste-input" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t.option1}</label>
+                      <textarea
+                        id="paste-input"
+                        placeholder={t.pastePlaceholder}
                         value={pastedData}
                         onChange={handlePaste}
-                        className="w-full bg-secondary/50 border border-white/5 rounded-xl p-4 h-40 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all font-mono"
+                        className="w-full bg-secondary/50 border border-white/5 rounded-xl p-4 h-40 text-sm outline-none focus-visible:ring transition-all font-mono"
                       />
-                      <p className="text-[10px] text-muted-foreground italic">
-                        Tip: Typing "ARG 1" twice counts as a duplicate.
-                      </p>
+                      <p className="text-[10px] text-muted-foreground italic">{t.pasteTip}</p>
                     </div>
 
+                    {/* Option 2 – grid | Option 3 – CSV */}
                     <div className="space-y-3">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Option 2: Interactive Grid</label>
-                      <div className="bg-secondary/30 border border-white/5 rounded-xl p-4 h-40 overflow-y-auto scrollbar-hide">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t.option2}</p>
+                      <div
+                        className="bg-secondary/30 border border-white/5 rounded-xl p-4 h-40 overflow-y-auto"
+                        role="group"
+                        aria-label={t.option2}
+                      >
                         <div className="space-y-4">
-                          {Object.entries(stickers.reduce((acc, s) => {
-                            if (!acc[s.team]) acc[s.team] = [];
-                            acc[s.team].push(s);
-                            return acc;
-                          }, {})).map(([team, teamStickers]) => (
+                          {Object.entries(
+                            stickers.reduce((acc, s) => {
+                              if (!acc[s.team]) acc[s.team] = [];
+                              acc[s.team].push(s);
+                              return acc;
+                            }, {})
+                          ).map(([team, teamStickers]) => (
                             <div key={team} className="space-y-2">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2" aria-hidden="true">
                                 <span className="text-[9px] font-black text-primary/70 tracking-widest">{team}</span>
                                 <div className="h-[1px] flex-1 bg-white/5" />
                               </div>
                               <div className="flex flex-wrap gap-1.5">
                                 {teamStickers.map(s => {
-                                  const isSelected = visitorStickers[`${s.team}-${s.number}`];
+                                  const sel = visitorStickers[s.id];
                                   return (
                                     <button
-                                      key={`grid-${s.id}`}
+                                      key={`mini-${s.id}`}
                                       onClick={() => toggleVisitorSticker(s.team, s.number)}
+                                      aria-label={t.stickerAriaLabel(s.team, s.number, sel ? t.filterOwned : t.filterMissing)}
+                                      aria-pressed={!!sel}
                                       className={cn(
-                                        "w-7 h-9 rounded-md text-[9px] font-black flex items-center justify-center transition-all relative",
-                                        isSelected 
-                                          ? "bg-primary text-primary-foreground scale-105 shadow-lg shadow-primary/20" 
-                                          : "bg-white/5 text-muted-foreground hover:bg-white/10"
+                                        'w-7 h-9 rounded-md text-[9px] font-black flex items-center justify-center transition-all relative',
+                                        sel
+                                          ? 'bg-primary text-primary-foreground scale-105 shadow-lg shadow-primary/20'
+                                          : 'bg-white/5 text-muted-foreground hover:bg-white/10'
                                       )}
                                     >
                                       {s.number}
-                                      {isSelected?.duplicated > 0 && (
-                                        <span className="absolute -top-1 -right-1 bg-white text-primary text-[7px] w-3 h-3 rounded-full flex items-center justify-center font-bold">
-                                          {isSelected.duplicated}
+                                      {sel?.duplicated > 0 && (
+                                        <span className="absolute -top-1 -right-1 bg-white text-primary text-[7px] w-3 h-3 rounded-full flex items-center justify-center font-bold" aria-hidden="true">
+                                          {sel.duplicated}
                                         </span>
                                       )}
                                     </button>
@@ -452,335 +644,504 @@ const App = () => {
                         </div>
                       </div>
                       <label className="w-full bg-primary text-primary-foreground hover:opacity-90 text-sm font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-primary/10 mt-2">
-                        <Upload className="w-4 h-4" />
-                        Option 3: Upload CSV
-                        <input type="file" className="hidden" accept=".csv" onChange={(e) => {
-                          const file = e.target.files[0];
-                          if (file) {
+                        <Upload className="w-4 h-4" aria-hidden="true" />
+                        {t.option3}
+                        <input
+                          type="file"
+                          className="sr-only"
+                          accept=".csv"
+                          aria-label={t.option3}
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
                             Papa.parse(file, {
                               header: true,
                               complete: (results) => {
                                 const parsed = {};
                                 results.data.forEach(r => {
-                                  const team = (r.Team || r.SEL)?.toUpperCase();
-                                  const number = (r.Number || r.NO);
+                                  const team  = (r.Team || r.SEL)?.toUpperCase();
+                                  const number = r.Number || r.NO;
                                   const owned = r.Owned?.toLowerCase() === 'true';
-                                  const dups = parseInt(r['Duplicated Qty'] || r.Duplicate) || 0;
-                                  
+                                  const dups  = parseInt(r['Duplicated Qty'] || r.Duplicate) || 0;
                                   if (team && number && owned) {
                                     parsed[`${team}-${number}`] = { team, number, owned: true, duplicated: dups };
                                   }
                                 });
                                 setVisitorStickers(parsed);
-                                setToastMessage('Collection uploaded successfully!');
-                                setShowToast(true);
-                                setTimeout(() => setShowToast(false), 3000);
-                              }
+                                showToastMessage(t.toastUploaded);
+                              },
                             });
-                          }
-                        }} />
+                          }}
+                        />
                       </label>
                     </div>
                   </div>
                 </div>
 
-                {/* Match Results */}
+                {/* Comparison Engine */}
                 <div className="glass p-6 rounded-2xl space-y-6 border border-white/5">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <h3 className="text-lg font-bold flex items-center gap-2">
-                      <RefreshCw className="w-5 h-5 text-primary" />
-                      Comparison Engine
-                    </h3>
-                    
+                    <h2 className="text-lg font-bold flex items-center gap-2">
+                      <RefreshCw className="w-5 h-5 text-primary" aria-hidden="true" />
+                      {t.comparisonEngine}
+                    </h2>
                     {Object.keys(visitorStickers).length > 0 && (
-                      <div className="flex items-center gap-4 bg-white/5 px-4 py-2 rounded-xl border border-white/10">
+                      <div className="flex items-center gap-4 bg-white/5 px-4 py-2 rounded-xl border border-white/10" aria-label={`${t.yourProgress}: ${visitorStats.perc}%, ${t.stickers}: ${visitorStats.totalOwned}`}>
                         <div className="text-center">
-                          <p className="text-[8px] font-black uppercase text-muted-foreground">Your Progress</p>
-                          <p className="text-sm font-black text-primary">{visitorStats.perc}%</p>
+                          <p className="text-[8px] font-black uppercase text-muted-foreground" aria-hidden="true">{t.yourProgress}</p>
+                          <p className="text-sm font-black text-primary" aria-hidden="true">{visitorStats.perc}%</p>
                         </div>
-                        <div className="w-[1px] h-6 bg-white/10" />
+                        <div className="w-[1px] h-6 bg-white/10" aria-hidden="true" />
                         <div className="text-center">
-                          <p className="text-[8px] font-black uppercase text-muted-foreground">Stickers in Hand</p>
-                          <p className="text-sm font-black text-white">{visitorStats.totalOwned}</p>
+                          <p className="text-[8px] font-black uppercase text-muted-foreground" aria-hidden="true">{t.stickers}</p>
+                          <p className="text-sm font-black text-white" aria-hidden="true">{visitorStats.totalOwned}</p>
                         </div>
                       </div>
                     )}
-
-                    <button 
+                    <button
                       onClick={copyTradeSummary}
                       disabled={Object.keys(visitorStickers).length === 0}
-                      className="text-xs font-bold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2"
+                      className="text-xs font-bold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2 focus-visible:ring"
                     >
-                      <Copy className="w-4 h-4" />
-                      Copy Trade Message
+                      <Copy className="w-4 h-4" aria-hidden="true" />
+                      {t.copyTradeMessage}
                     </button>
                   </div>
-                  
+
                   <div className="grid sm:grid-cols-2 gap-6">
                     <div className="space-y-4">
-                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-primary flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4" />
-                        I HAVE WHAT YOU NEED ({tradeMatches.iHaveYouNeed.length})
-                      </h4>
+                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-primary flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
+                        {t.iHaveYouNeed} ({tradeMatches.iHaveYouNeed.length})
+                      </h3>
                       <div className="flex flex-wrap gap-2">
-                        {tradeMatches.iHaveYouNeed.length > 0 ? (
-                          tradeMatches.iHaveYouNeed.map(s => (
-                            <span key={s.id} className="px-2 py-1 bg-primary/10 border border-primary/20 rounded text-[10px] font-bold text-primary">
-                              {s.team} {s.number}
-                            </span>
-                          ))
-                        ) : (
-                          <p className="text-xs text-muted-foreground italic">Add your collection to find matches.</p>
-                        )}
+                        {tradeMatches.iHaveYouNeed.length > 0
+                          ? tradeMatches.iHaveYouNeed.map(s => (
+                              <span key={s.id} className="px-2 py-1 bg-primary/10 border border-primary/20 rounded text-[10px] font-bold text-primary">
+                                {s.team} {s.number}
+                              </span>
+                            ))
+                          : <p className="text-xs text-muted-foreground italic">{t.addToFindMatches}</p>
+                        }
                       </div>
                     </div>
-
                     <div className="space-y-4">
-                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-green-400 flex items-center gap-2">
-                        <Users className="w-4 h-4" />
-                        YOU HAVE WHAT I NEED ({tradeMatches.youHaveINeed.length})
-                      </h4>
+                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-green-400 flex items-center gap-2">
+                        <Users className="w-4 h-4" aria-hidden="true" />
+                        {t.youHaveINeed} ({tradeMatches.youHaveINeed.length})
+                      </h3>
                       <div className="flex flex-wrap gap-2">
-                        {tradeMatches.youHaveINeed.length > 0 ? (
-                          tradeMatches.youHaveINeed.map(v => (
-                            <span key={`${v.team}-${v.number}`} className="px-2 py-1 bg-green-500/10 border border-green-500/20 rounded text-[10px] font-bold text-green-400">
-                              {v.team} {v.number}
-                            </span>
-                          ))
-                        ) : (
-                          <p className="text-xs text-muted-foreground italic">No overlaps found yet.</p>
-                        )}
+                        {tradeMatches.youHaveINeed.length > 0
+                          ? tradeMatches.youHaveINeed.map(v => (
+                              <span key={`${v.team}-${v.number}`} className="px-2 py-1 bg-green-500/10 border border-green-500/20 rounded text-[10px] font-bold text-green-400">
+                                {v.team} {v.number}
+                              </span>
+                            ))
+                          : <p className="text-xs text-muted-foreground italic">{t.noMatchesYet}</p>
+                        }
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Right Column: Contact & Info */}
+              {/* Contact card */}
               <div className="space-y-6">
                 <div className="glass p-6 rounded-2xl bg-gradient-to-br from-primary/20 to-transparent border border-primary/20 shadow-xl shadow-primary/5">
-                  <h3 className="text-lg font-bold mb-2">Let's Swap! 🤝</h3>
-                  <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-                    Found some matches? Contact me via LinkedIn or Email and let's complete our albums together!
-                  </p>
-                  
+                  <h2 className="text-lg font-bold mb-2">{t.letsSwap}</h2>
+                  <p className="text-sm text-muted-foreground mb-6 leading-relaxed">{t.swapDesc}</p>
                   <div className="space-y-3">
-                    <a 
-                      href="https://www.linkedin.com/in/fghenriques/" 
-                      target="_blank" 
+                    <a
+                      href={config.ownerLinkedIn}
+                      target="_blank"
                       rel="noreferrer"
                       className="w-full bg-white text-black font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-all shadow-lg"
                     >
-                      <Share2 className="w-4 h-4" />
-                      LinkedIn Profile
+                      <Share2 className="w-4 h-4" aria-hidden="true" />
+                      {t.linkedinProfile}
                     </a>
-                    <a 
-                      href={`mailto:fghenriques99@outlook.com?subject=Troca de Cromos - Mundial 2026&body=${encodeURIComponent(getTradeMessage())}`}
+                    <a
+                      href={`mailto:${config.ownerEmail}?subject=${encodeURIComponent(t.emailSubject)}&body=${encodeURIComponent(getTradeMessage())}`}
                       className="w-full bg-secondary text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-white/10 transition-all"
                     >
-                      Direct Email
+                      {t.sendEmail}
                     </a>
                   </div>
-
                   <div className="mt-8 pt-6 border-t border-white/5 space-y-4">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Email</p>
-                      <p className="text-xs font-medium text-primary">fghenriques99@outlook.com</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{t.emailLabel}</p>
+                      <p className="text-xs font-medium text-primary">{config.ownerEmail}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Location</p>
-                      <p className="text-sm font-bold">Lisbon, Portugal 🇵🇹</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{t.locationLabel}</p>
+                      <p className="text-sm font-bold">{config.ownerLocation} {config.ownerLocationFlag}</p>
                     </div>
                   </div>
                 </div>
 
                 <div className="glass p-6 rounded-2xl border border-white/5">
-                  <h4 className="text-sm font-bold mb-4 flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-primary" />
-                    Simple Workflow
-                  </h4>
-                  <ul className="space-y-4">
-                    {[
-                      { step: 1, text: "Enter your owned stickers via paste, grid, or CSV." },
-                      { step: 2, text: "Compare mutual needs in the engine results." },
-                      { step: 3, text: "Copy the pre-filled message and reach out!" },
-                    ].map(item => (
-                      <li key={item.step} className="flex gap-3">
-                        <span className="flex-shrink-0 w-5 h-5 bg-white/5 rounded flex items-center justify-center text-[10px] font-bold">{item.step}</span>
-                        <p className="text-xs text-muted-foreground leading-snug">{item.text}</p>
+                  <h2 className="text-sm font-bold mb-4 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-primary" aria-hidden="true" />
+                    {t.howItWorks}
+                  </h2>
+                  <ol className="space-y-4">
+                    {[t.step1, t.step2, t.step3].map((text, i) => (
+                      <li key={i} className="flex gap-3">
+                        <span className="flex-shrink-0 w-5 h-5 bg-white/5 rounded flex items-center justify-center text-[10px] font-bold" aria-hidden="true">{i + 1}</span>
+                        <p className="text-xs text-muted-foreground leading-snug">{text}</p>
                       </li>
                     ))}
-                  </ul>
+                  </ol>
                 </div>
               </div>
             </motion.div>
-          ) : activeTab === 'inventory' ? (
+          )}
+
+          {/* ── Collection Progress ───────────────────────────────────────────── */}
+          {activeTab === 'inventory' && (
             <motion.div
               key="inventory"
+              role="tabpanel"
+              id="panel-inventory"
+              aria-labelledby="tab-inventory"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               className="space-y-6"
             >
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input 
-                    type="text" 
-                    placeholder="Search team or number..." 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-secondary/50 border border-white/5 rounded-xl py-3 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                  />
+              <div className="flex flex-col md:flex-row gap-4 justify-between">
+                <div className="flex gap-4 flex-1">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
+                    <input
+                      type="search"
+                      aria-label={t.searchAriaLabel}
+                      placeholder={t.searchPlaceholder}
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-secondary/50 border border-white/5 rounded-xl py-3 pl-10 pr-4 focus-visible:ring outline-none transition-all"
+                    />
+                  </div>
+                  <select
+                    aria-label={t.filterAriaLabel}
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="bg-secondary/50 border border-white/5 rounded-xl px-4 py-3 outline-none text-sm font-medium focus-visible:ring"
+                  >
+                    <option value="all">{t.filterAll}</option>
+                    <option value="owned">{t.filterOwned}</option>
+                    <option value="missing">{t.filterMissing}</option>
+                    <option value="duplicated">{t.filterDuplicated}</option>
+                  </select>
                 </div>
-                <select 
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="bg-secondary/50 border border-white/5 rounded-xl px-4 py-3 outline-none text-sm font-medium"
-                >
-                  <option value="all">All Stickers</option>
-                  <option value="owned">Owned</option>
-                  <option value="missing">Missing</option>
-                  <option value="duplicated">Duplicated</option>
-                </select>
-              </div>
-
-              {loading ? (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-                  {[...Array(24)].map((_, i) => (
-                    <div key={i} className="aspect-[3/4] bg-secondary animate-pulse rounded-xl" />
+                <div role="group" aria-label="View mode" className="flex p-1 bg-secondary rounded-xl w-fit h-fit self-end">
+                  {[
+                    { id: 'grid',  icon: LayoutGrid, label: t.grid },
+                    { id: 'teams', icon: BarChart3,   label: t.byTeam },
+                  ].map(v => (
+                    <button
+                      key={v.id}
+                      aria-pressed={inventoryView === v.id}
+                      onClick={() => setInventoryView(v.id)}
+                      className={cn('px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1', inventoryView === v.id ? 'bg-card text-primary' : 'text-muted-foreground hover:text-foreground')}
+                    >
+                      <v.icon className="w-3 h-3" aria-hidden="true" /> {v.label}
+                    </button>
                   ))}
                 </div>
-              ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-                  {filteredStickers.map((s) => {
-                    const visitorData = visitorStickers[`${s.team}-${s.number}`];
-                    const isOwned = !!visitorData;
-                    const dups = visitorData?.duplicated || 0;
-
-                    return (
-                      <div 
-                        key={s.id}
-                        className={cn(
-                          "aspect-[3/4] p-2 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all relative overflow-hidden",
-                          isOwned 
-                            ? "bg-green-500/10 border-green-500/30 text-green-400" 
-                            : "bg-secondary/50 border-white/5 text-muted-foreground"
-                        )}
-                      >
-                        <span className="text-[10px] font-black tracking-tighter opacity-70">{s.team}</span>
-                        <span className="text-lg font-black leading-none">{s.number}</span>
-                        {dups > 0 && (
-                          <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-lg">
-                            +{dups}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </motion.div>
-          ) : activeTab === 'inventory' ? (
-            <motion.div
-              key="inventory"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
-            >
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input 
-                    type="text" 
-                    placeholder="Search team or number..." 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-secondary/50 border border-white/5 rounded-xl py-3 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                  />
-                </div>
-                <select 
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="bg-secondary/50 border border-white/5 rounded-xl px-4 py-3 outline-none text-sm font-medium"
-                >
-                  <option value="all">All Stickers</option>
-                  <option value="owned">Owned</option>
-                  <option value="missing">Missing</option>
-                  <option value="duplicated">Duplicated</option>
-                </select>
               </div>
 
-              {loading ? (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-                  {[...Array(24)].map((_, i) => (
-                    <div key={i} className="aspect-[3/4] bg-secondary animate-pulse rounded-xl" />
-                  ))}
+              {inventoryView === 'grid' ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] text-muted-foreground italic">{t.clickToToggle}</p>
+                    <p className="text-[10px] font-bold text-muted-foreground">{t.showingCount(filteredStickers.length)}</p>
+                  </div>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                    {filteredStickers.map(s => {
+                      const vd      = visitorStickers[s.id];
+                      const isOwned = !!vd;
+                      const dups    = vd?.duplicated || 0;
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => toggleVisitorSticker(s.team, s.number)}
+                          aria-label={t.stickerAriaLabel(s.team, s.number, isOwned ? (dups > 0 ? `${t.filterOwned}, +${dups}` : t.filterOwned) : t.filterMissing)}
+                          aria-pressed={isOwned}
+                          className={cn(
+                            'aspect-[3/4] p-2 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all relative overflow-hidden',
+                            isOwned
+                              ? 'bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20'
+                              : 'bg-secondary/50 border-white/5 text-muted-foreground hover:bg-white/5 hover:border-white/20'
+                          )}
+                        >
+                          <span className="text-[10px] font-black tracking-tighter opacity-70" aria-hidden="true">{s.team}</span>
+                          <span className="text-lg font-black leading-none" aria-hidden="true">{s.number}</span>
+                          {dups > 0 && (
+                            <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-lg" aria-hidden="true">
+                              +{dups}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-                  {filteredStickers.map((s) => {
-                    const visitorData = visitorStickers[`${s.team}-${s.number}`];
-                    const isOwned = !!visitorData;
-                    const dups = visitorData?.duplicated || 0;
-
-                    return (
-                      <div 
-                        key={s.id}
-                        className={cn(
-                          "aspect-[3/4] p-2 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all relative overflow-hidden",
-                          isOwned 
-                            ? "bg-green-500/10 border-green-500/30 text-green-400" 
-                            : "bg-secondary/50 border-white/5 text-muted-foreground"
-                        )}
-                      >
-                        <span className="text-[10px] font-black tracking-tighter opacity-70">{s.team}</span>
-                        <span className="text-lg font-black leading-none">{s.number}</span>
-                        {dups > 0 && (
-                          <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-lg">
-                            +{dups}
-                          </span>
-                        )}
+                <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4" aria-label="Team progress">
+                  {teamProgress.map(({ team, total, owned, perc }) => (
+                    <li key={team} className="glass p-4 rounded-2xl border border-white/5 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="font-black text-sm">{team}</span>
+                        <span className="text-[10px] font-bold text-muted-foreground" aria-label={`${owned} of ${total}`}>{owned}/{total}</span>
                       </div>
-                    );
-                  })}
-                </div>
+                      <div
+                        className="w-full h-1.5 bg-secondary rounded-full overflow-hidden"
+                        role="progressbar"
+                        aria-label={`${team} ${perc}%`}
+                        aria-valuenow={perc}
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                      >
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${perc}%` }}
+                          transition={{ duration: 0.6, ease: 'easeOut' }}
+                          className={cn('h-full rounded-full', parseInt(perc) === 100 ? 'bg-green-400' : parseInt(perc) > 50 ? 'bg-primary' : 'bg-blue-400')}
+                        />
+                      </div>
+                      <p className="text-[10px] font-bold text-right text-muted-foreground" aria-hidden="true">{perc}%</p>
+                    </li>
+                  ))}
+                </ul>
               )}
             </motion.div>
-          ) : activeTab === 'duplicates' ? (
+          )}
+
+          {/* ── Available Duplicates ─────────────────────────────────────────── */}
+          {activeTab === 'duplicates' && (
             <motion.div
               key="duplicates"
+              role="tabpanel"
+              id="panel-duplicates"
+              aria-labelledby="tab-duplicates"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="space-y-6"
             >
               <div className="glass p-8 rounded-3xl border border-white/5 text-center space-y-6">
-                <div className="w-16 h-16 bg-primary/20 text-primary rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <div className="w-16 h-16 bg-primary/20 text-primary rounded-2xl flex items-center justify-center mx-auto" aria-hidden="true">
                   <Copy className="w-8 h-8" />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-black mb-2">Available for Trade</h3>
-                  <p className="text-muted-foreground max-w-lg mx-auto">
-                    These are the stickers I have more than one of. If you see something you need, reach out!
-                  </p>
+                  <h2 className="text-2xl font-black mb-2">{t.availableForTrade}</h2>
+                  <p className="text-muted-foreground max-w-lg mx-auto">{t.duplicatesDesc}</p>
                 </div>
-                
-                <div className="flex flex-wrap justify-center gap-3 max-w-4xl mx-auto">
-                  {Object.values(visitorStickers).filter(v => v.duplicated > 0).map(v => (
-                    <div key={`dup-${v.team}-${v.number}`} className="px-4 py-3 bg-secondary/50 border border-white/10 rounded-2xl flex flex-col items-center gap-1 min-w-[80px]">
-                      <span className="text-[10px] font-black text-muted-foreground">{v.team}</span>
-                      <span className="text-xl font-black text-primary">{v.number}</span>
-                      <span className="text-[9px] font-bold bg-primary/10 px-2 py-0.5 rounded-full text-primary">+{v.duplicated}</span>
+                {ownerDuplicates.length > 0 ? (
+                  <>
+                    <div className="flex items-center justify-center gap-4">
+                      <span className="text-sm font-bold text-muted-foreground">{t.showingCount(ownerDuplicates.length)}</span>
+                      <button
+                        onClick={() => {
+                          const list = ownerDuplicates.map(s => `${s.team} ${s.number} (+${s.duplicated})`).join(', ');
+                          navigator.clipboard.writeText(list);
+                          showToastMessage(t.toastDuplicatesCopied);
+                        }}
+                        className="text-xs font-bold bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 transition-all"
+                      >
+                        <Copy className="w-3 h-3" aria-hidden="true" />
+                        {t.copyDuplicatesList}
+                      </button>
                     </div>
-                  ))}
-                </div>
+                    <ul className="flex flex-wrap justify-center gap-3 max-w-4xl mx-auto" aria-label={t.availableForTrade}>
+                      {ownerDuplicates.map(s => (
+                        <li key={`dup-${s.id}`} className="px-4 py-3 bg-secondary/50 border border-white/10 rounded-2xl flex flex-col items-center gap-1 min-w-[80px]">
+                          <span className="text-[10px] font-black text-muted-foreground">{s.team}</span>
+                          <span className="text-xl font-black text-primary">{s.number}</span>
+                          <span className="text-[9px] font-bold bg-primary/10 px-2 py-0.5 rounded-full text-primary">+{s.duplicated}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">{t.noDuplicates}</p>
+                )}
               </div>
             </motion.div>
-          ) : (
+          )}
+
+          {/* ── Sticking Guide ────────────────────────────────────────────────── */}
+          {activeTab === 'sticking' && (
+            <motion.div
+              key="sticking"
+              role="tabpanel"
+              id="panel-sticking"
+              aria-labelledby="tab-sticking"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h2 className="text-xl font-black flex items-center gap-2">
+                    <BookOpen className="w-5 h-5 text-primary" aria-hidden="true" />
+                    {t.stickingTitle}
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-lg">{t.stickingDesc}</p>
+                </div>
+                {packInput.trim() && (
+                  <button
+                    onClick={resetPack}
+                    aria-label={t.stickingClearAriaLabel}
+                    className="text-[10px] font-black bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-1.5 transition-all flex-shrink-0"
+                  >
+                    <RefreshCw className="w-3 h-3" aria-hidden="true" />
+                    {t.stickingClear}
+                  </button>
+                )}
+              </div>
+
+              {/* Pack input */}
+              <div className="glass p-6 rounded-2xl border border-white/5 space-y-3">
+                <label htmlFor="pack-input" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground block">
+                  {t.stickingInputLabel}
+                </label>
+                <textarea
+                  id="pack-input"
+                  placeholder={t.stickingInputPlaceholder}
+                  value={packInput}
+                  onChange={(e) => handlePackInput(e.target.value)}
+                  className="w-full bg-secondary/50 border border-white/5 rounded-xl p-4 h-28 text-sm outline-none focus-visible:ring transition-all font-mono resize-none"
+                />
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] text-muted-foreground italic">{t.stickingInputTip}</p>
+                  {packInput.trim() && (
+                    <span className={cn(
+                      'text-[10px] font-bold px-2 py-0.5 rounded-full',
+                      parsedPackStickers.length > 0 ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'
+                    )}>
+                      {parsedPackStickers.length > 0 ? t.stickingFound(parsedPackStickers.length) : t.stickingNoMatch}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Empty: no input */}
+              {!packInput.trim() && (
+                <div className="glass p-12 rounded-3xl border border-white/5 text-center space-y-3">
+                  <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center mx-auto" aria-hidden="true">
+                    <BookOpen className="w-7 h-7 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">{t.stickingInputPlaceholder}</p>
+                </div>
+              )}
+
+              {/* Has input but no match in sheet */}
+              {packInput.trim() && parsedPackStickers.length === 0 && (
+                <div className="glass p-8 rounded-3xl border border-destructive/20 text-center space-y-2">
+                  <p className="font-bold">{t.stickingNoMatch}</p>
+                  <p className="text-sm text-muted-foreground">{t.stickingNoMatchDesc}</p>
+                </div>
+              )}
+
+              {/* All placed */}
+              {parsedPackStickers.length > 0 && unstuckCount === 0 && (
+                <div className="glass p-12 rounded-3xl border border-green-500/20 bg-green-500/5 text-center space-y-4">
+                  <div className="w-14 h-14 bg-green-500/10 rounded-2xl flex items-center justify-center mx-auto" aria-hidden="true">
+                    <CheckCircle2 className="w-7 h-7 text-green-400" />
+                  </div>
+                  <p className="font-black text-xl">{t.stickingAllDone}</p>
+                  <p className="text-sm text-muted-foreground max-w-sm mx-auto">{t.stickingAllDoneDesc}</p>
+                  <button onClick={resetPack} className="text-sm font-bold bg-white/5 hover:bg-white/10 px-5 py-2 rounded-xl border border-white/10 transition-all">
+                    {t.stickingClear}
+                  </button>
+                </div>
+              )}
+
+              {/* Page groups */}
+              {stickingGuidePages.length > 0 && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground" aria-live="polite">
+                      {t.stickingCount(unstuckCount, stickingGuidePages.filter(p => p.page).length)}
+                    </p>
+                    <button
+                      onClick={markAllStuck}
+                      className="text-[10px] font-black bg-green-500/10 hover:bg-green-500/20 text-green-400 px-3 py-1.5 rounded-lg border border-green-500/20 flex items-center gap-1.5 transition-all"
+                    >
+                      <CheckSquare className="w-3 h-3" aria-hidden="true" />
+                      {t.stickingMarkAll}
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    <AnimatePresence>
+                      {stickingGuidePages.map(({ page, stickers: pageStickers }) => (
+                        <motion.div
+                          key={`page-${page ?? 'none'}`}
+                          layout
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+                          className="glass p-5 rounded-2xl border border-white/5 space-y-4"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className={cn(
+                                'px-3 py-1 text-xs font-black rounded-lg border',
+                                page ? 'bg-primary/10 text-primary border-primary/20' : 'bg-white/5 text-muted-foreground border-white/10'
+                              )}>
+                                {page ? `${t.stickingPage} ${page}` : t.stickingNoPageGroup}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground font-bold">
+                                {pageStickers.length} {pageStickers.length === 1 ? 'sticker' : 'stickers'}
+                              </span>
+                            </div>
+                            {page && (
+                              <button
+                                onClick={() => markPageStuck(pageStickers)}
+                                aria-label={`${t.stickingMarkPage} ${page}`}
+                                className="text-[10px] font-black bg-green-500/10 hover:bg-green-500/20 text-green-400 px-3 py-1.5 rounded-lg border border-green-500/20 flex items-center gap-1.5 transition-all"
+                              >
+                                <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
+                                {t.stickingMarkPage}
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {pageStickers.map(s => (
+                              <button
+                                key={`stick-${s.id}`}
+                                onClick={() => markStickerStuck(s.id)}
+                                aria-label={t.stickingMarkOne(s.team, s.number)}
+                                className="group px-3 py-2 bg-secondary/50 hover:bg-green-500/10 border border-white/10 hover:border-green-500/30 rounded-xl flex flex-col items-center gap-0.5 min-w-[60px] transition-all"
+                              >
+                                <span className="text-[9px] font-black text-muted-foreground group-hover:text-green-400 transition-colors">{s.team}</span>
+                                <span className="text-base font-black text-foreground group-hover:text-green-400 transition-colors">{s.number}</span>
+                                <CheckCircle2 className="w-3 h-3 text-transparent group-hover:text-green-400 transition-colors" aria-hidden="true" />
+                              </button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                  {parsedPackStickers.some(s => !s.page) && (
+                    <p className="text-[10px] text-muted-foreground italic">{t.stickingNoPagesDesc}</p>
+                  )}
+                </>
+              )}
+            </motion.div>
+          )}
+
+          {/* ── Investment ────────────────────────────────────────────────────── */}
+          {activeTab === 'investment' && (
             <motion.div
               key="investment"
+              role="tabpanel"
+              id="panel-investment"
+              aria-labelledby="tab-investment"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
@@ -788,25 +1149,29 @@ const App = () => {
             >
               <div className="grid md:grid-cols-3 gap-6">
                 <div className="glass p-6 rounded-3xl border border-white/5 space-y-4">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Configuração</h4>
+                  <h2 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t.configuration}</h2>
                   <div className="space-y-4">
                     <div>
-                      <label className="text-xs font-bold block mb-2">Preço por Saqueta (€)</label>
-                      <input 
-                        type="number" 
+                      <label htmlFor={t.pricePerPackId} className="text-xs font-bold block mb-2">{t.pricePerPackLabel}</label>
+                      <input
+                        id={t.pricePerPackId}
+                        type="number"
                         step="0.05"
+                        min="0"
                         value={pricePerPack}
                         onChange={(e) => setPricePerPack(parseFloat(e.target.value) || 0)}
-                        className="w-full bg-secondary/50 border border-white/5 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                        className="w-full bg-secondary/50 border border-white/5 rounded-xl px-4 py-2 outline-none focus-visible:ring transition-all"
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-bold block mb-2">Stickers por Saqueta</label>
-                      <input 
-                        type="number" 
+                      <label htmlFor={t.stickersPerPackId} className="text-xs font-bold block mb-2">{t.stickersPerPackLabel}</label>
+                      <input
+                        id={t.stickersPerPackId}
+                        type="number"
+                        min="1"
                         value={stickersPerPack}
                         onChange={(e) => setStickersPerPack(parseInt(e.target.value) || 1)}
-                        className="w-full bg-secondary/50 border border-white/5 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                        className="w-full bg-secondary/50 border border-white/5 rounded-xl px-4 py-2 outline-none focus-visible:ring transition-all"
                       />
                     </div>
                   </div>
@@ -814,34 +1179,14 @@ const App = () => {
 
                 <div className="md:col-span-2 grid sm:grid-cols-2 gap-4">
                   {[
-                    { 
-                      label: 'Total Gasto (Est.)', 
-                      value: `${(ownerStats.totalOwned / stickersPerPack * pricePerPack).toFixed(2)}€`, 
-                      desc: 'Com base nos stickers que tens',
-                      color: 'text-primary' 
-                    },
-                    { 
-                      label: 'Saquetas Compradas', 
-                      value: Math.ceil(ownerStats.totalOwned / stickersPerPack), 
-                      desc: 'Estimativa total',
-                      color: 'text-blue-400' 
-                    },
-                    { 
-                      label: 'Saquetas em Falta', 
-                      value: Math.ceil(ownerStats.missing / stickersPerPack), 
-                      desc: 'Melhor cenário (sem duplas)',
-                      color: 'text-orange-400' 
-                    },
-                    { 
-                      label: 'Custo p/ Completar', 
-                      value: `${(Math.ceil(ownerStats.missing / stickersPerPack) * pricePerPack).toFixed(2)}€`, 
-                      desc: 'Investimento mínimo necessário',
-                      color: 'text-green-400' 
-                    },
+                    { label: t.totalSpent,     value: `${(ownerStats.totalOwned / stickersPerPack * pricePerPack).toFixed(2)}€`,             desc: t.totalSpentDesc,     color: 'text-primary' },
+                    { label: t.packsPurchased, value: Math.ceil(ownerStats.totalOwned / stickersPerPack),                                     desc: t.packsPurchasedDesc, color: 'text-blue-400' },
+                    { label: t.packsRemaining, value: Math.ceil(ownerStats.missing / stickersPerPack),                                        desc: t.packsRemainingDesc, color: 'text-orange-400' },
+                    { label: t.costToComplete, value: `${(Math.ceil(ownerStats.missing / stickersPerPack) * pricePerPack).toFixed(2)}€`,      desc: t.costToCompleteDesc, color: 'text-green-400' },
                   ].map(item => (
                     <div key={item.label} className="glass p-6 rounded-3xl border border-white/5 space-y-1">
                       <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{item.label}</p>
-                      <p className={cn("text-3xl font-black", item.color)}>{item.value}</p>
+                      <p className={cn('text-3xl font-black', item.color)}>{item.value}</p>
                       <p className="text-[10px] text-muted-foreground italic">{item.desc}</p>
                     </div>
                   ))}
@@ -849,47 +1194,54 @@ const App = () => {
               </div>
 
               <div className="glass p-8 rounded-3xl border border-white/5">
-                <h3 className="text-xl font-black mb-6 flex items-center gap-2">
-                  <RefreshCw className="w-5 h-5 text-primary" />
-                  Análise de Eficiência
-                </h3>
+                <h2 className="text-xl font-black mb-6 flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-primary" aria-hidden="true" />
+                  {t.efficiencyAnalysis}
+                </h2>
                 <div className="grid md:grid-cols-3 gap-8">
-                  <div className="space-y-2">
-                    <p className="text-sm font-bold">Taxa de Duplicados</p>
-                    <div className="text-3xl font-black text-primary">
-                      {((ownerStats.duplicated / (ownerStats.totalOwned || 1)) * 100).toFixed(1)}%
+                  {[
+                    {
+                      label: t.duplicateRate,
+                      value: `${((ownerStats.duplicated / (ownerStats.totalOwned || 1)) * 100).toFixed(1)}%`,
+                      desc: t.duplicateRateDesc,
+                      color: 'text-primary',
+                    },
+                    {
+                      label: t.valueInTrades,
+                      value: `${((ownerStats.duplicated / stickersPerPack) * pricePerPack).toFixed(2)}€`,
+                      desc: t.valueInTradesDesc,
+                      color: 'text-green-400',
+                    },
+                    {
+                      label: t.newPerPack,
+                      value: (ownerStats.uniqueOwned / (Math.ceil(ownerStats.totalOwned / stickersPerPack) || 1)).toFixed(1),
+                      desc: t.newPerPackDesc,
+                      color: 'text-blue-400',
+                    },
+                  ].map(item => (
+                    <div key={item.label} className="space-y-2">
+                      <p className="text-sm font-bold">{item.label}</p>
+                      <p className={cn('text-3xl font-black', item.color)}>{item.value}</p>
+                      <p className="text-xs text-muted-foreground">{item.desc}</p>
                     </div>
-                    <p className="text-xs text-muted-foreground">Dos stickers que compraste, estes são repetidos.</p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-bold">Valor em Trocas</p>
-                    <div className="text-3xl font-black text-green-400">
-                      {((ownerStats.duplicated / stickersPerPack) * pricePerPack).toFixed(2)}€
-                    </div>
-                    <p className="text-xs text-muted-foreground">Valor "preso" em duplicados que podes trocar.</p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-bold">Stickers p/ Saqueta Real</p>
-                    <div className="text-3xl font-black text-blue-400">
-                      {((ownerStats.uniqueOwned / (Math.ceil(ownerStats.totalOwned / stickersPerPack) || 1))).toFixed(1)}
-                    </div>
-                    <p className="text-xs text-muted-foreground">Média de cromos novos por cada saqueta.</p>
-                  </div>
+                  ))}
                 </div>
               </div>
             </motion.div>
           )}
+
         </AnimatePresence>
       </main>
 
       <footer className="max-w-7xl mx-auto p-12 text-center space-y-4 border-t border-white/5">
-        <div className="flex justify-center gap-6 text-muted-foreground">
-          <a href="https://www.linkedin.com/in/fghenriques/" target="_blank" rel="noreferrer" className="hover:text-primary transition-colors font-bold text-xs">LinkedIn</a>
-          <a href="mailto:fghenriques99@outlook.com" className="hover:text-primary transition-colors font-bold text-xs">Support</a>
-          <span className="text-xs font-bold">•</span>
-          <span className="text-xs font-bold">2026 World Cup Edition</span>
+        <div className="flex justify-center flex-wrap gap-6 text-muted-foreground">
+          <a href={config.ownerLinkedIn} target="_blank" rel="noreferrer" className="hover:text-primary transition-colors font-bold text-xs">LinkedIn</a>
+          <a href={config.ownerGitHub}   target="_blank" rel="noreferrer" className="hover:text-primary transition-colors font-bold text-xs">GitHub</a>
+          <a href={`mailto:${config.ownerEmail}`}        className="hover:text-primary transition-colors font-bold text-xs">{t.contact}</a>
+          <span className="text-xs font-bold" aria-hidden="true">•</span>
+          <span className="text-xs font-bold">{t.worldCupEdition}</span>
         </div>
-        <p className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-widest">Premium Sticker Tracker &copy; 2026</p>
+        <p className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-widest">{t.tagline}</p>
       </footer>
     </div>
   );
