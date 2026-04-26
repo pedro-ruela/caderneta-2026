@@ -37,7 +37,7 @@
 
 ### 1. Fork this repository
 
-Click **Fork** at the top right of this page. You'll have your own copy in seconds.
+Click **Fork** at the top right of this page. You'll have your own copy in seconds - do not copy only main.
 
 ### 2. Edit the one config file
 
