@@ -44,8 +44,11 @@ const App = () => {
       
       // Initialize visitor collection with data from the Google Sheet
       const initialCollection = {};
+      let sheetHasData = false;
+
       data.forEach(s => {
         if (s.owned) {
+          sheetHasData = true;
           initialCollection[`${s.team}-${s.number}`] = { 
             team: s.team, 
             number: s.number, 
@@ -55,25 +58,23 @@ const App = () => {
         }
       });
       
-      // Merge with localStorage but ONLY for stickers that exist in the master list
+      // If the sheet has data, it is the master source. 
+      // We only use localStorage as a fallback if the sheet is empty (e.g. new user).
       const saved = localStorage.getItem('visitor_collection');
-      if (saved) {
+      if (saved && !sheetHasData) {
         try {
           const parsedSaved = JSON.parse(saved);
-          const merged = { ...initialCollection };
-          
-          Object.keys(parsedSaved).forEach(key => {
-            // Only keep if it's a valid ID from the master list
-            if (data.some(s => `${s.team}-${s.number}` === key)) {
-              merged[key] = parsedSaved[key];
-            }
-          });
-          setVisitorStickers(merged);
+          setVisitorStickers(parsedSaved);
         } catch (e) {
           setVisitorStickers(initialCollection);
         }
       } else {
+        // Use the sheet data (Master)
         setVisitorStickers(initialCollection);
+        // Sync local storage with the master sheet immediately to clean up old junk
+        if (sheetHasData) {
+          localStorage.setItem('visitor_collection', JSON.stringify(initialCollection));
+        }
       }
     } catch (error) {
       console.error('Failed to load stickers:', error);
