@@ -76,14 +76,16 @@ const App = () => {
 
   const stats = useMemo(() => {
     const total = stickers.length;
-    if (total === 0) return { total: 0, owned: 0, missing: 0, duplicated: 0, perc: 0 };
+    if (total === 0) return { total: 0, uniqueOwned: 0, totalOwned: 0, missing: 0, duplicated: 0, perc: 0 };
     
-    const owned = Object.keys(visitorStickers).length;
-    const missing = total - owned;
+    const uniqueOwned = Object.keys(visitorStickers).length;
     const duplicatedCount = Object.values(visitorStickers).reduce((acc, s) => acc + s.duplicated, 0);
-    const perc = ((owned / total) * 100).toFixed(1);
+    const totalOwned = uniqueOwned + duplicatedCount;
     
-    return { total, owned, missing, duplicated: duplicatedCount, perc };
+    const missing = total - uniqueOwned;
+    const perc = ((uniqueOwned / total) * 100).toFixed(1);
+    
+    return { total, uniqueOwned, totalOwned, missing, duplicated: duplicatedCount, perc };
   }, [stickers, visitorStickers]);
 
   const filteredStickers = useMemo(() => {
@@ -272,7 +274,7 @@ const App = () => {
         <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { label: 'Total Stickers', value: stats.total, icon: LayoutGrid, color: 'text-blue-400' },
-            { label: 'Owned', value: stats.owned, icon: CheckCircle2, color: 'text-green-400' },
+            { label: 'Owned', value: stats.totalOwned, icon: CheckCircle2, color: 'text-green-400' },
             { label: 'Missing', value: stats.missing, icon: XCircle, color: 'text-red-400' },
             { label: 'Duplicated', value: stats.duplicated, icon: Copy, color: 'text-primary' },
           ].map((stat, i) => (
@@ -776,13 +778,13 @@ const App = () => {
                   {[
                     { 
                       label: 'Total Gasto (Est.)', 
-                      value: `${((stats.owned + stats.duplicated) / stickersPerPack * pricePerPack).toFixed(2)}€`, 
+                      value: `${(stats.totalOwned / stickersPerPack * pricePerPack).toFixed(2)}€`, 
                       desc: 'Com base nos stickers que tens',
                       color: 'text-primary' 
                     },
                     { 
                       label: 'Saquetas Compradas', 
-                      value: Math.ceil((stats.owned + stats.duplicated) / stickersPerPack), 
+                      value: Math.ceil(stats.totalOwned / stickersPerPack), 
                       desc: 'Estimativa total',
                       color: 'text-blue-400' 
                     },
@@ -817,7 +819,7 @@ const App = () => {
                   <div className="space-y-2">
                     <p className="text-sm font-bold">Taxa de Duplicados</p>
                     <div className="text-3xl font-black text-primary">
-                      {((stats.duplicated / (stats.owned + stats.duplicated || 1)) * 100).toFixed(1)}%
+                      {((stats.duplicated / (stats.totalOwned || 1)) * 100).toFixed(1)}%
                     </div>
                     <p className="text-xs text-muted-foreground">Dos stickers que compraste, estes são repetidos.</p>
                   </div>
@@ -831,7 +833,7 @@ const App = () => {
                   <div className="space-y-2">
                     <p className="text-sm font-bold">Stickers p/ Saqueta Real</p>
                     <div className="text-3xl font-black text-blue-400">
-                      {((stats.owned / (Math.ceil((stats.owned + stats.duplicated) / stickersPerPack) || 1))).toFixed(1)}
+                      {((stats.uniqueOwned / (Math.ceil(stats.totalOwned / stickersPerPack) || 1))).toFixed(1)}
                     </div>
                     <p className="text-xs text-muted-foreground">Média de cromos novos por cada saqueta.</p>
                   </div>
