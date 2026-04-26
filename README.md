@@ -45,8 +45,12 @@ Open **`src/config.js`** — this is the **only file you need to change**. Every
 
 ```js
 export const config = {
+  // ── GitHub deployment ─────────────────────────────────────────────────────
+  githubUsername: 'your-username',   // your GitHub username
+  repoName:       'your-repo-name',  // your repository name
+
   // ── Your profile ──────────────────────────────────────────────────────────
-  ownerName:         'Francisco',                    // Your display name
+  ownerName:         'Your Name',                    // Your display name
   ownerEmail:        'you@example.com',              // Contact email
   ownerLinkedIn:     'https://www.linkedin.com/in/your-handle/',
   ownerGitHub:       'https://github.com/you/your-repo',
@@ -59,7 +63,7 @@ export const config = {
   googleSheetTemplateUrl: 'https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit',
 
   // ── Investment defaults ───────────────────────────────────────────────────
-  defaultPricePerPack:    1.20,   // € per sticker pack
+  defaultPricePerPack:    1.50,   // € per sticker pack
   defaultStickersPerPack: 7,      // stickers per pack
 };
 ```
