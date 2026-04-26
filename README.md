@@ -113,9 +113,14 @@ npm install
 npm run deploy
 ```
 
-Your tracker will be live at `https://your-username.github.io/your-repo-name/`.
+**First time only — enable GitHub Pages:**
 
-> **Tip:** The `npm run deploy` command builds the project and pushes the `dist/` folder to the `gh-pages` branch automatically via `gh-pages`.
+1. Go to your repository on GitHub → **Settings → Pages**
+2. Under **Branch**, select `gh-pages` and click **Save**
+
+Your tracker will be live at `https://your-username.github.io/your-repo-name/` within a minute.
+
+> **Tip:** For every future update, just run `npm run deploy` again — it rebuilds and republishes automatically. The `main` branch holds your source code; `gh-pages` holds the compiled site. You never touch `gh-pages` directly.
 
 ---
 
