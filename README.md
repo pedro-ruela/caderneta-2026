@@ -99,10 +99,12 @@ This step is **required** — without it the app cannot fetch your data.
 
 Then go to **File → Share → Share with anyone** and set access to **Viewer** (this covers both the direct export URL the app uses and the published CSV).
 
-To find your `SHEET_ID` and `SHEET_GID`, look at the URL of your sheet:
+To find your `SHEET_ID` and `SHEET_GID`, click on the **Caderneta COMP** tab at the bottom of your sheet and look at the browser URL:
 ```
 https://docs.google.com/spreadsheets/d/SHEET_ID/edit#gid=SHEET_GID
 ```
+
+> ⚠️ The GID must match the **Caderneta COMP** tab specifically — not the first sheet. Each tab has its own GID.
 
 Paste both values into `src/config.js`.
 
