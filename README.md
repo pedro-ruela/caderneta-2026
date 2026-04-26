@@ -104,23 +104,33 @@ Paste both values into `src/config.js`.
 
 ### 4. Deploy to GitHub Pages
 
+**4a. Set your repo name in `vite.config.js`**
+
+Open `vite.config.js` and update the `base` field to match **your** repository name — this is required or all assets will 404:
+
+```js
+base: '/your-repo-name/',   // e.g. '/stickers-2026/'
+```
+
+**4b. (Optional) Update social preview tags in `index.html`**
+
+If you want a preview image when sharing your link on LinkedIn, WhatsApp etc., update the three `og:` lines near the bottom of `index.html` with your username, repo name, and image.
+
+**4c. Build and publish**
+
 ```bash
 npm install
-
-# In vite.config.js, update base to match your repo name:
-# base: '/your-repo-name/',
-
 npm run deploy
 ```
 
-**First time only — enable GitHub Pages:**
+**4d. Enable GitHub Pages (first time only)**
 
 1. Go to your repository on GitHub → **Settings → Pages**
 2. Under **Branch**, select `gh-pages` and click **Save**
 
 Your tracker will be live at `https://your-username.github.io/your-repo-name/` within a minute.
 
-> **Tip:** For every future update, just run `npm run deploy` again — it rebuilds and republishes automatically. The `main` branch holds your source code; `gh-pages` holds the compiled site. You never touch `gh-pages` directly.
+> For every future update just run `npm run deploy` again. The `main` branch holds your source code; `gh-pages` holds the compiled site — never edit it directly.
 
 ---
 
