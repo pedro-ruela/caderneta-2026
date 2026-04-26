@@ -4,6 +4,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const config = {
+  // ── GitHub deployment ─────────────────────────────────────────────────────
+  githubUsername: 'fghenriques99',   // your GitHub username
+  repoName: 'caderneta-2026',        // your repository name (used for the site URL and base path)
+
   // ── Your profile ──────────────────────────────────────────────────────────
   ownerName: 'Francisco',
   ownerEmail: 'fghenriques99@outlook.com',
