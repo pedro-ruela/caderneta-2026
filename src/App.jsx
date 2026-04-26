@@ -81,6 +81,7 @@ const App = () => {
   const [lang, setLang]                       = useState(getInitialLang);
   const [activeTab, setActiveTab]             = useState('match');
   const [inventoryView, setInventoryView]     = useState('grid');
+  const [collectionSource, setCollectionSource] = useState('visitor');
   const [pricePerPack, setPricePerPack]       = useState(config.defaultPricePerPack);
   const [stickersPerPack, setStickersPerPack] = useState(config.defaultStickersPerPack);
   const [searchQuery, setSearchQuery]         = useState('');
@@ -168,23 +169,32 @@ const App = () => {
     return { total, uniqueOwned, totalOwned, duplicated: duplicatedCount, perc };
   }, [stickers, visitorStickers]);
 
+  const activeOwnership = useMemo(() => {
+    if (collectionSource === 'owner') {
+      const map = {};
+      stickers.forEach(s => { if (s.owned) map[s.id] = { owned: true, duplicated: s.duplicated }; });
+      return map;
+    }
+    return visitorStickers;
+  }, [collectionSource, stickers, visitorStickers]);
+
   const teamProgress = useMemo(() => {
     const teams = {};
     stickers.forEach(s => {
       if (!teams[s.team]) teams[s.team] = { total: 0, owned: 0 };
       teams[s.team].total++;
-      if (visitorStickers[s.id]) teams[s.team].owned++;
+      if (activeOwnership[s.id]) teams[s.team].owned++;
     });
     return Object.entries(teams)
       .map(([team, stats]) => ({ team, ...stats, perc: ((stats.owned / stats.total) * 100).toFixed(0) }))
       .sort((a, b) => parseFloat(b.perc) - parseFloat(a.perc));
-  }, [stickers, visitorStickers]);
+  }, [stickers, activeOwnership]);
 
   const ownerDuplicates = useMemo(() => stickers.filter(s => s.duplicated > 0), [stickers]);
 
   const filteredStickers = useMemo(() => {
     return stickers.filter(s => {
-      const vd       = visitorStickers[s.id];
+      const vd       = activeOwnership[s.id];
       const isOwned  = !!vd;
       const hasDups  = vd?.duplicated > 0;
       const matchSearch = s.number.includes(searchQuery) || s.team.toLowerCase().includes(searchQuery.toLowerCase());
@@ -195,7 +205,7 @@ const App = () => {
         (filterStatus === 'duplicated' && hasDups);
       return matchSearch && matchStatus;
     });
-  }, [stickers, searchQuery, filterStatus, visitorStickers]);
+  }, [stickers, searchQuery, filterStatus, activeOwnership]);
 
   // ── Sticking Guide ────────────────────────────────────────────────────────────
 
@@ -875,45 +885,71 @@ const App = () => {
                     <option value="duplicated">{t.filterDuplicated}</option>
                   </select>
                 </div>
-                <div role="group" aria-label="View mode" className="flex p-1 bg-secondary rounded-xl w-fit h-fit self-end">
-                  {[
-                    { id: 'grid',  icon: LayoutGrid, label: t.grid },
-                    { id: 'teams', icon: BarChart3,   label: t.byTeam },
-                  ].map(v => (
-                    <button
-                      key={v.id}
-                      aria-pressed={inventoryView === v.id}
-                      onClick={() => setInventoryView(v.id)}
-                      className={cn('px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1', inventoryView === v.id ? 'bg-card text-primary' : 'text-muted-foreground hover:text-foreground')}
-                    >
-                      <v.icon className="w-3 h-3" aria-hidden="true" /> {v.label}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-3 flex-wrap justify-end">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground font-medium">{t.viewingLabel}</span>
+                    <div role="group" aria-label="Collection source" className="flex p-1 bg-secondary rounded-xl">
+                      {[
+                        { id: 'visitor', label: t.viewingVisitor },
+                        { id: 'owner',   label: t.viewingOwner(config.ownerName) },
+                      ].map(v => (
+                        <button
+                          key={v.id}
+                          aria-pressed={collectionSource === v.id}
+                          onClick={() => setCollectionSource(v.id)}
+                          className={cn('px-3 py-1.5 rounded-lg text-xs font-bold transition-all', collectionSource === v.id ? 'bg-card text-primary' : 'text-muted-foreground hover:text-foreground')}
+                        >
+                          {v.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div role="group" aria-label="View mode" className="flex p-1 bg-secondary rounded-xl">
+                    {[
+                      { id: 'grid',  icon: LayoutGrid, label: t.grid },
+                      { id: 'teams', icon: BarChart3,   label: t.byTeam },
+                    ].map(v => (
+                      <button
+                        key={v.id}
+                        aria-pressed={inventoryView === v.id}
+                        onClick={() => setInventoryView(v.id)}
+                        className={cn('px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1', inventoryView === v.id ? 'bg-card text-primary' : 'text-muted-foreground hover:text-foreground')}
+                      >
+                        <v.icon className="w-3 h-3" aria-hidden="true" /> {v.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
               {inventoryView === 'grid' ? (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-[10px] text-muted-foreground italic">{t.clickToToggle}</p>
+                    <p className="text-[10px] text-muted-foreground italic">
+                      {collectionSource === 'visitor' ? t.clickToToggle : `${config.ownerName}'s collection — read only`}
+                    </p>
                     <p className="text-[10px] font-bold text-muted-foreground">{t.showingCount(filteredStickers.length)}</p>
                   </div>
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
                     {filteredStickers.map(s => {
-                      const vd      = visitorStickers[s.id];
+                      const vd      = activeOwnership[s.id];
                       const isOwned = !!vd;
                       const dups    = vd?.duplicated || 0;
+                      const isOwnerMode = collectionSource === 'owner';
                       return (
                         <button
                           key={s.id}
-                          onClick={() => toggleVisitorSticker(s.team, s.number)}
+                          onClick={isOwnerMode ? undefined : () => toggleVisitorSticker(s.team, s.number)}
+                          disabled={isOwnerMode}
                           aria-label={t.stickerAriaLabel(s.team, s.number, isOwned ? (dups > 0 ? `${t.filterOwned}, +${dups}` : t.filterOwned) : t.filterMissing)}
-                          aria-pressed={isOwned}
+                          aria-pressed={isOwnerMode ? undefined : isOwned}
                           className={cn(
                             'aspect-[3/4] p-2 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all relative overflow-hidden',
                             isOwned
-                              ? 'bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20'
-                              : 'bg-secondary/50 border-white/5 text-muted-foreground hover:bg-white/5 hover:border-white/20'
+                              ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                              : 'bg-secondary/50 border-white/5 text-muted-foreground',
+                            !isOwnerMode && (isOwned ? 'hover:bg-green-500/20' : 'hover:bg-white/5 hover:border-white/20'),
+                            isOwnerMode && 'cursor-default'
                           )}
                         >
                           <span className="text-[10px] font-black tracking-tighter opacity-70" aria-hidden="true">{s.team}</span>

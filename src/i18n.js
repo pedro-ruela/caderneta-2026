@@ -80,6 +80,9 @@ const translations = {
     noDuplicates: 'No duplicates available yet.',
     copyDuplicatesList: 'Copy List',
     showingCount: (n) => `${n} sticker${n !== 1 ? 's' : ''}`,
+    viewingLabel: 'Viewing:',
+    viewingVisitor: 'My Collection',
+    viewingOwner: (name) => `${name}'s Collection`,
 
     // ── Sticking Guide tab ───────────────────────────────────────────────────
     stickingTitle: 'Sticking Guide',
@@ -228,6 +231,9 @@ const translations = {
     noDuplicates: 'Ainda não há repetidos disponíveis.',
     copyDuplicatesList: 'Copiar Lista',
     showingCount: (n) => `${n} cromo${n !== 1 ? 's' : ''}`,
+    viewingLabel: 'A ver:',
+    viewingVisitor: 'A Minha Coleção',
+    viewingOwner: (name) => `Coleção de ${name}`,
 
     // ── Sticking Guide tab ───────────────────────────────────────────────────
     stickingTitle: 'Guia de Colagem',
