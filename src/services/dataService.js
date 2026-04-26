@@ -33,17 +33,19 @@ export const fetchStickerData = async () => {
   });
 };
 
-// Full team name map — extend for your tournament's teams
 export const TEAM_NAMES = {
-  ARG: 'Argentina',    AUS: 'Australia',   BEL: 'Belgium',
-  BRA: 'Brazil',       CAN: 'Canada',      CHI: 'Chile',
-  COL: 'Colombia',     CRO: 'Croatia',     DEN: 'Denmark',
-  ECU: 'Ecuador',      ENG: 'England',     ESP: 'Spain',
-  FRA: 'France',       GER: 'Germany',     GHA: 'Ghana',
-  IRN: 'Iran',         ITA: 'Italy',       JPN: 'Japan',
-  KOR: 'South Korea',  KSA: 'Saudi Arabia',MAR: 'Morocco',
-  MEX: 'Mexico',       NED: 'Netherlands', POL: 'Poland',
-  POR: 'Portugal',     SEN: 'Senegal',     SRB: 'Serbia',
-  SUI: 'Switzerland',  TUN: 'Tunisia',     URU: 'Uruguay',
-  USA: 'USA',          WAL: 'Wales',
+  ALG: 'Algeria',           ARG: 'Argentina',        AUS: 'Australia',
+  AUT: 'Austria',           BEL: 'Belgium',          BIH: 'Bosnia-Herzegovina',
+  BRA: 'Brazil',            CIV: "Cote D'Ivoire",    CPV: 'Cabo Verde',
+  CRO: 'Croatia',           CUW: 'Curaçao',          CZE: 'Czechia',
+  ECU: 'Ecuador',           EGY: 'Egypt',            ENG: 'England',
+  ESP: 'Spain',             FRA: 'France',           FWC: 'FIFA World Cup',
+  GER: 'Germany',           GHA: 'Ghana',            IRN: 'Iran',
+  IRQ: 'Iraq',              JOR: 'Jordan',           JPN: 'Japan',
+  KOR: 'Korea Republic',    MAR: 'Morocco',          MEX: 'México',
+  NED: 'Netherlands',       NOR: 'Norway',           NZL: 'New Zealand',
+  PAN: 'Panama',            PAR: 'Paraguay',         POR: 'Portugal',
+  QAT: 'Qatar',             RSA: 'South Africa',     SUI: 'Switzerland',
+  SWE: 'Sweden',            TUN: 'Tunisia',          TUR: 'Turkiye',
+  URU: 'Uruguay',           UZB: 'Uzbekistan',
 };

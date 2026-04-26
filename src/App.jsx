@@ -5,7 +5,7 @@ import {
   BarChart3, Trash2, TrendingUp, GitFork, BookOpen, CheckSquare,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { fetchStickerData } from './services/dataService';
+import { fetchStickerData, TEAM_NAMES } from './services/dataService';
 import { config } from './config';
 import translations from './i18n';
 import Papa from 'papaparse';
@@ -55,6 +55,23 @@ const LangToggle = ({ lang, onChangeLang }) => (
   </div>
 );
 
+// ── Country lookup helpers (built once at module level) ───────────────────────
+
+const COUNTRY_TO_ISO = Object.fromEntries(
+  Object.entries(TEAM_NAMES).map(([iso, name]) => [name.toLowerCase(), iso])
+);
+
+const _stickerPatternSource = (() => {
+  const ids = [...new Set([...Object.keys(TEAM_NAMES), ...Object.values(TEAM_NAMES)])]
+    .sort((a, b) => b.length - a.length);
+  return `(${ids.map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\s+(\\d+)`;
+})();
+
+const resolveISO = (raw) => {
+  const upper = raw.toUpperCase();
+  return TEAM_NAMES[upper] ? upper : COUNTRY_TO_ISO[raw.toLowerCase()];
+};
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 const App = () => {
@@ -88,33 +105,11 @@ const App = () => {
     try {
       const data = await fetchStickerData();
 
-      const initialCollection = {};
-      let sheetHasData = false;
-
-      data.forEach(s => {
-        if (s.owned) {
-          sheetHasData = true;
-          initialCollection[s.id] = {
-            team: s.team, number: s.number, owned: true, duplicated: s.duplicated || 0,
-          };
-        }
-      });
-
-      const saved = localStorage.getItem('visitor_collection');
-      if (saved && !sheetHasData) {
-        try {
-          setVisitorStickers(JSON.parse(saved));
-        } catch {
-          setVisitorStickers(initialCollection);
-        }
-      } else {
-        setVisitorStickers(initialCollection);
-        if (sheetHasData) {
-          localStorage.setItem('visitor_collection', JSON.stringify(initialCollection));
-        }
-      }
-
       setStickers(data);
+      const saved = localStorage.getItem('visitor_collection');
+      if (saved) {
+        try { setVisitorStickers(JSON.parse(saved)); } catch { /* keep empty */ }
+      }
       setError(null);
       setLoading(false);
     } catch (err) {
@@ -206,11 +201,12 @@ const App = () => {
 
   const parsedPackStickers = useMemo(() => {
     if (!packInput.trim()) return [];
-    const regex = /([A-Za-z]{3})\s*(\d+)/g;
+    const regex = new RegExp(_stickerPatternSource, 'gi');
     let match;
     const ids = new Set();
     while ((match = regex.exec(packInput)) !== null) {
-      ids.add(`${match[1].toUpperCase()}-${match[2]}`);
+      const iso = resolveISO(match[1]);
+      if (iso) ids.add(`${iso}-${match[2]}`);
     }
     return stickers.filter(s => ids.has(s.id));
   }, [packInput, stickers]);
@@ -268,15 +264,15 @@ const App = () => {
   // ── Collection actions ────────────────────────────────────────────────────────
 
   const parseTextToStickers = (text) => {
-    const regex = /([A-Z]{3})\s*(\d+)/gi;
-    let match;
+    const regex = new RegExp(_stickerPatternSource, 'gi');
     const result = {};
+    let match;
     while ((match = regex.exec(text)) !== null) {
-      const team   = match[1].toUpperCase();
-      const number = match[2];
-      const id     = `${team}-${number}`;
+      const iso = resolveISO(match[1]);
+      if (!iso) continue;
+      const id = `${iso}-${match[2]}`;
       if (result[id]) result[id].duplicated += 1;
-      else result[id] = { team, number, owned: true, duplicated: 0 };
+      else result[id] = { team: iso, number: match[2], owned: true, duplicated: 0 };
     }
     return result;
   };
@@ -313,22 +309,47 @@ const App = () => {
     if (visitorList.length === 0) return { iHaveYouNeed: [], youHaveINeed: [] };
     const youHaveINeed = visitorList.filter(v => {
       const owner = stickers.find(s => s.id === `${v.team}-${v.number}`);
-      return owner && !owner.owned && v.duplicated > 0;
+      return owner && !owner.owned;
     });
     const iHaveYouNeed = stickers.filter(s => s.duplicated > 0 && !visitorStickers[s.id]);
     return { iHaveYouNeed, youHaveINeed };
   }, [stickers, visitorStickers]);
 
   const downloadTemplate = () => {
+    const mkSheet = (rows, headers, cols) => {
+      const ws = rows.length > 0
+        ? XLSX.utils.json_to_sheet(rows)
+        : XLSX.utils.aoa_to_sheet([headers]);
+      ws['!cols'] = cols;
+      return ws;
+    };
+    const collectionRows = stickers.map(s => {
+      const vd = visitorStickers[s.id];
+      return { Team: s.team, Country: TEAM_NAMES[s.team] || s.team, Number: s.number, Page: s.page || '', Owned: vd ? 'TRUE' : 'FALSE', 'Duplicated Qty': vd?.duplicated ?? 0 };
+    });
+    const missingRows = stickers
+      .filter(s => !visitorStickers[s.id])
+      .map(s => ({ Team: s.team, Country: TEAM_NAMES[s.team] || s.team, Number: s.number, Page: s.page || '' }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, mkSheet(collectionRows, ['Team','Country','Number','Page','Owned','Duplicated Qty'], [{ wch: 6 }, { wch: 20 }, { wch: 8 }, { wch: 6 }, { wch: 8 }, { wch: 14 }]), 'Collection');
+    XLSX.utils.book_append_sheet(wb, mkSheet(missingRows, ['Team','Country','Number','Page'], [{ wch: 6 }, { wch: 20 }, { wch: 8 }, { wch: 6 }]), 'Missing');
+    XLSX.writeFile(wb, 'wc2026_collection.xlsx');
+    showToastMessage(t.toastDownloaded);
+  };
+
+  const downloadTemplateCSV = () => {
     const rows = stickers.map(s => {
       const vd = visitorStickers[s.id];
-      return { Team: s.team, Number: s.number, Page: s.page || '', Owned: vd ? 'TRUE' : 'FALSE', 'Duplicated Qty': vd?.duplicated ?? 0 };
+      return { Team: s.team, Country: TEAM_NAMES[s.team] || s.team, Number: s.number, Page: s.page || '', Owned: vd ? 'TRUE' : 'FALSE', 'Duplicated Qty': vd?.duplicated ?? 0 };
     });
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 6 }, { wch: 8 }, { wch: 6 }, { wch: 8 }, { wch: 14 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Collection');
-    XLSX.writeFile(wb, 'wc2026_collection.xlsx');
+    const csv  = Papa.unparse(rows);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href  = URL.createObjectURL(blob);
+    link.setAttribute('download', 'wc2026_collection.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     showToastMessage(t.toastDownloaded);
   };
 
@@ -427,12 +448,15 @@ const App = () => {
       <header className="sticky top-0 z-50 glass border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary rounded-xl shadow-lg shadow-primary/20" aria-hidden="true">
-              <Trophy className="w-6 h-6 text-primary-foreground" />
-            </div>
+            <img
+              src={`${import.meta.env.BASE_URL}wwfavicon.png`}
+              alt=""
+              aria-hidden="true"
+              className="w-10 h-10 rounded-full ring-2 ring-amber-400/50 drop-shadow-[0_0_10px_rgba(251,191,36,0.55)]"
+            />
             <div>
-              <h1 className="text-xl font-bold tracking-tight">WC 2026 Tracker</h1>
-              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-[0.2em]">{t.subtitle}</p>
+              <h1 className="text-xl font-black tracking-tight bg-gradient-to-br from-yellow-300 via-amber-400 to-yellow-600 bg-clip-text text-transparent drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">WC 2026 Tracker</h1>
+              <p className="text-[10px] text-amber-400/70 font-bold uppercase tracking-[0.25em]">{t.subtitle}</p>
             </div>
           </div>
 
@@ -567,11 +591,19 @@ const App = () => {
                       )}
                       <button
                         onClick={downloadTemplate}
-                        aria-label={t.templateAriaLabel}
-                        className="text-[10px] font-black bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 transition-all"
+                        aria-label="Download XLSX"
+                        className="text-[10px] font-black bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-1.5 transition-all"
                       >
                         <Download className="w-3 h-3" aria-hidden="true" />
-                        {t.template}
+                        {t.downloadXLSX}
+                      </button>
+                      <button
+                        onClick={downloadTemplateCSV}
+                        aria-label="Download CSV"
+                        className="text-[10px] font-black bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-1.5 transition-all"
+                      >
+                        <Download className="w-3 h-3" aria-hidden="true" />
+                        {t.downloadCSV}
                       </button>
                     </div>
                   </div>
@@ -655,7 +687,10 @@ const App = () => {
                             const parseRows = (rows) => {
                               const parsed = {};
                               rows.forEach(r => {
-                                const team   = (r.Team || r.SEL)?.toString().toUpperCase();
+                                const teamRaw = (r.Team || r.SEL || r.Country)?.toString().trim();
+                                if (!teamRaw) return;
+                                const upper = teamRaw.toUpperCase();
+                                const team  = TEAM_NAMES[upper] ? upper : COUNTRY_TO_ISO[teamRaw.toLowerCase()];
                                 const number = (r.Number || r.NO)?.toString();
                                 const owned  = r.Owned?.toString().toLowerCase() === 'true';
                                 const dups   = parseInt(r['Duplicated Qty'] || r.Duplicate) || 0;
@@ -1141,7 +1176,7 @@ const App = () => {
             </motion.div>
           )}
 
-          {/* ── Investment ────────────────────────────────────────────────────── */}
+          {/* ── Cost ──────────────────────────────────────────────────────────── */}
           {activeTab === 'investment' && (
             <motion.div
               key="investment"
@@ -1153,6 +1188,7 @@ const App = () => {
               exit={{ opacity: 0, y: -20 }}
               className="space-y-8"
             >
+              {/* Config + summary cards */}
               <div className="grid md:grid-cols-3 gap-6">
                 <div className="glass p-6 rounded-3xl border border-white/5 space-y-4">
                   <h2 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t.configuration}</h2>
@@ -1185,10 +1221,10 @@ const App = () => {
 
                 <div className="md:col-span-2 grid sm:grid-cols-2 gap-4">
                   {[
-                    { label: t.totalSpent,     value: `${(ownerStats.totalOwned / stickersPerPack * pricePerPack).toFixed(2)}€`,             desc: t.totalSpentDesc,     color: 'text-primary' },
-                    { label: t.packsPurchased, value: Math.ceil(ownerStats.totalOwned / stickersPerPack),                                     desc: t.packsPurchasedDesc, color: 'text-blue-400' },
-                    { label: t.packsRemaining, value: Math.ceil(ownerStats.missing / stickersPerPack),                                        desc: t.packsRemainingDesc, color: 'text-orange-400' },
-                    { label: t.costToComplete, value: `${(Math.ceil(ownerStats.missing / stickersPerPack) * pricePerPack).toFixed(2)}€`,      desc: t.costToCompleteDesc, color: 'text-green-400' },
+                    { label: t.totalSpent,     value: `${(ownerStats.totalOwned / stickersPerPack * pricePerPack).toFixed(2)}€`,        desc: t.totalSpentDesc,     color: 'text-primary' },
+                    { label: t.packsPurchased, value: Math.ceil(ownerStats.totalOwned / stickersPerPack),                                desc: t.packsPurchasedDesc, color: 'text-blue-400' },
+                    { label: t.packsRemaining, value: Math.ceil(ownerStats.missing / stickersPerPack),                                   desc: t.packsRemainingDesc, color: 'text-orange-400' },
+                    { label: t.costToComplete, value: `${(Math.ceil(ownerStats.missing / stickersPerPack) * pricePerPack).toFixed(2)}€`, desc: t.costToCompleteDesc, color: 'text-green-400' },
                   ].map(item => (
                     <div key={item.label} className="glass p-6 rounded-3xl border border-white/5 space-y-1">
                       <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{item.label}</p>
@@ -1199,6 +1235,7 @@ const App = () => {
                 </div>
               </div>
 
+              {/* Efficiency analysis */}
               <div className="glass p-8 rounded-3xl border border-white/5">
                 <h2 className="text-xl font-black mb-6 flex items-center gap-2">
                   <TrendingUp className="w-5 h-5 text-primary" aria-hidden="true" />
@@ -1206,24 +1243,9 @@ const App = () => {
                 </h2>
                 <div className="grid md:grid-cols-3 gap-8">
                   {[
-                    {
-                      label: t.duplicateRate,
-                      value: `${((ownerStats.duplicated / (ownerStats.totalOwned || 1)) * 100).toFixed(1)}%`,
-                      desc: t.duplicateRateDesc,
-                      color: 'text-primary',
-                    },
-                    {
-                      label: t.valueInTrades,
-                      value: `${((ownerStats.duplicated / stickersPerPack) * pricePerPack).toFixed(2)}€`,
-                      desc: t.valueInTradesDesc,
-                      color: 'text-green-400',
-                    },
-                    {
-                      label: t.newPerPack,
-                      value: (ownerStats.uniqueOwned / (Math.ceil(ownerStats.totalOwned / stickersPerPack) || 1)).toFixed(1),
-                      desc: t.newPerPackDesc,
-                      color: 'text-blue-400',
-                    },
+                    { label: t.duplicateRate, value: `${((ownerStats.duplicated / (ownerStats.totalOwned || 1)) * 100).toFixed(1)}%`, desc: t.duplicateRateDesc, color: 'text-primary' },
+                    { label: t.valueInTrades, value: `${((ownerStats.duplicated / stickersPerPack) * pricePerPack).toFixed(2)}€`,      desc: t.valueInTradesDesc, color: 'text-green-400' },
+                    { label: t.newPerPack,    value: (ownerStats.uniqueOwned / (Math.ceil(ownerStats.totalOwned / stickersPerPack) || 1)).toFixed(1), desc: t.newPerPackDesc, color: 'text-blue-400' },
                   ].map(item => (
                     <div key={item.label} className="space-y-2">
                       <p className="text-sm font-bold">{item.label}</p>
@@ -1233,6 +1255,7 @@ const App = () => {
                   ))}
                 </div>
               </div>
+
             </motion.div>
           )}
 

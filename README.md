@@ -1,6 +1,6 @@
 # WC 2026 Sticker Tracker
 
-> A premium, accessible web app to track your 2026 FIFA World Cup sticker collection — find trade partners, follow a page-by-page sticking guide, and analyse your investment. Designed to be **forked and personalised in under 10 minutes**.
+> A web app to track your 2026 FIFA World Cup sticker collection — compare with the owner to swap duplicates, follow a page-by-page sticking guide, and log your pack spend. Designed to be **forked and personalised in under 10 minutes**.
 
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white&style=flat-square)](https://react.dev)
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white&style=flat-square)](https://vitejs.dev)
@@ -18,8 +18,8 @@
 | **Trade & Compare** | Enter your collection (paste, interactive grid, or CSV upload) and instantly see mutual trade opportunities with the album owner |
 | **Collection Progress** | Browse all stickers in a full interactive grid (click to toggle ownership) or switch to a per-team progress breakdown |
 | **Available Duplicates** | See exactly which stickers the owner has available to trade, with duplicate counts |
-| **Sticking Guide** | Your owned stickers sorted by album page — open the album, stick them, mark as done. Badge on the tab shows how many are left to place |
-| **Investment** | Configure your pack price and size to track total spend, packs remaining, and packing efficiency |
+| **Sticking Guide** | Paste codes from a new pack — stickers are sorted by album page so you can stick them in order without flipping back and forth. Mark each one done as you go. |
+| **Cost** | Configure your pack price and size to track total spend, packs opened, and packing efficiency |
 
 **Additional highlights:**
 
@@ -84,19 +84,23 @@ The sheet has these columns:
 | `Duplicate` | ✅ | How many extra copies you have (0 if none) |
 | `Page` | ⭐ | Album page number — **required for the Sticking Guide** |
 
-**3c. Publish the sheet as CSV**
+**3c. Make the sheet publicly accessible**
+
+This step is **required** — without it the app cannot fetch your data.
 
 1. **File → Share → Publish to web**
-2. Select your data sheet tab from the dropdown
+2. Select your data sheet tab from the first dropdown
 3. Set the format to **CSV**
-4. Click **Publish** and copy the URL
+4. Click **Publish**
 
-The URL will look like:
+Then go to **File → Share → Share with anyone** and set access to **Viewer** (this covers both the direct export URL the app uses and the published CSV).
+
+To find your `SHEET_ID` and `SHEET_GID`, look at the URL of your sheet:
 ```
-https://docs.google.com/spreadsheets/d/SHEET_ID/pub?gid=SHEET_GID&single=true&output=csv
+https://docs.google.com/spreadsheets/d/SHEET_ID/edit#gid=SHEET_GID
 ```
 
-Extract `SHEET_ID` and `SHEET_GID` from that URL and paste them into `src/config.js`.
+Paste both values into `src/config.js`.
 
 ### 4. Deploy to GitHub Pages
 

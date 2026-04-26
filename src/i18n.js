@@ -23,7 +23,7 @@ const translations = {
     tabInventory: 'Collection Progress',
     tabDuplicates: 'Available Duplicates',
     tabSticking: 'Sticking Guide',
-    tabInvestment: 'Investment',
+    tabInvestment: 'Cost',
 
     // ── Trade tab — your collection panel ───────────────────────────────────
     yourCollection: 'Your Collection',
@@ -89,7 +89,7 @@ const translations = {
     stickingInputTip: 'Tip: Paste multiple packs at once — just dump all the codes in together.',
     stickingFound: (n) => `${n} sticker${n !== 1 ? 's' : ''} found`,
     stickingNoMatch: 'No stickers matched.',
-    stickingNoMatchDesc: 'Check that team codes are 3 letters (e.g. ARG, BRA, ESP) and the numbers are correct.',
+    stickingNoMatchDesc: 'Try ISO codes (ARG, BRA, ESP) or full country names (Argentina, Brazil, Spain) followed by the sticker number.',
     stickingNoPageGroup: 'No page assigned',
     stickingNoPagesDesc: 'Add a "Page" column to your Google Sheet for full sticking guide support.',
     stickingPage: 'Page',
@@ -102,7 +102,7 @@ const translations = {
     stickingAllDoneDesc: 'Every sticker from this pack is in the album. Paste the next pack to continue.',
     stickingCount: (n, p) => `${n} sticker${n !== 1 ? 's' : ''} to place across ${p} page${p !== 1 ? 's' : ''}`,
 
-    // ── Investment tab ───────────────────────────────────────────────────────
+    // ── Cost tab ─────────────────────────────────────────────────────────────
     configuration: 'Configuration',
     pricePerPackLabel: 'Price per Pack (€)',
     pricePerPackId: 'price-per-pack',
@@ -123,6 +123,8 @@ const translations = {
     valueInTradesDesc: 'Value "locked" in duplicates available to trade.',
     newPerPack: 'New Stickers per Pack',
     newPerPackDesc: 'Average new stickers per pack opened.',
+    downloadXLSX: 'XLSX',
+    downloadCSV: 'CSV',
 
     // ── Loading / Error screens ──────────────────────────────────────────────
     loadingMsg: 'Loading your collection…',
@@ -142,7 +144,7 @@ const translations = {
     // ── Footer ───────────────────────────────────────────────────────────────
     contact: 'Contact',
     worldCupEdition: '2026 World Cup Edition',
-    tagline: 'Premium Sticker Tracker © 2026',
+    tagline: 'Sticker Tracker © 2026',
 
     // ── Trade message body ───────────────────────────────────────────────────
     tradeMessage: (iHave, youHave) =>
@@ -169,7 +171,7 @@ const translations = {
     tabInventory: 'Progresso da Coleção',
     tabDuplicates: 'Repetidos Disponíveis',
     tabSticking: 'Guia de Colagem',
-    tabInvestment: 'Investimento',
+    tabInvestment: 'Custo',
 
     // ── Trade tab — your collection panel ───────────────────────────────────
     yourCollection: 'A Tua Coleção',
@@ -235,7 +237,7 @@ const translations = {
     stickingInputTip: 'Dica: Podes colar várias saquetas ao mesmo tempo — junta todos os códigos.',
     stickingFound: (n) => `${n} cromo${n !== 1 ? 's' : ''} encontrado${n !== 1 ? 's' : ''}`,
     stickingNoMatch: 'Nenhum cromo encontrado.',
-    stickingNoMatchDesc: 'Verifica que os códigos de equipa têm 3 letras (ex: ARG, BRA, ESP) e os números estão corretos.',
+    stickingNoMatchDesc: 'Usa códigos ISO (ARG, BRA, ESP) ou nomes completos (Argentina, Brazil, Espanha) seguidos do número do cromo.',
     stickingNoPageGroup: 'Sem página atribuída',
     stickingNoPagesDesc: 'Adiciona uma coluna "Page" na tua Google Sheet para usar o guia de colagem.',
     stickingPage: 'Página',
@@ -248,7 +250,7 @@ const translations = {
     stickingAllDoneDesc: 'Todos os cromos desta saqueta estão no álbum. Cola os da próxima para continuar.',
     stickingCount: (n, p) => `${n} cromo${n !== 1 ? 's' : ''} para colar em ${p} página${p !== 1 ? 's' : ''}`,
 
-    // ── Investment tab ───────────────────────────────────────────────────────
+    // ── Tab Custo ────────────────────────────────────────────────────────────
     configuration: 'Configuração',
     pricePerPackLabel: 'Preço por Saqueta (€)',
     pricePerPackId: 'price-per-pack',
@@ -269,6 +271,8 @@ const translations = {
     valueInTradesDesc: 'Valor "preso" em repetidos que podes trocar.',
     newPerPack: 'Cromos Novos por Saqueta',
     newPerPackDesc: 'Média de cromos novos por cada saqueta aberta.',
+    downloadXLSX: 'XLSX',
+    downloadCSV: 'CSV',
 
     // ── Loading / Error screens ──────────────────────────────────────────────
     loadingMsg: 'A carregar a tua coleção…',
@@ -288,7 +292,7 @@ const translations = {
     // ── Footer ───────────────────────────────────────────────────────────────
     contact: 'Contacto',
     worldCupEdition: 'Edição Mundial 2026',
-    tagline: 'Tracker Premium de Cromos © 2026',
+    tagline: 'Tracker de Cromos © 2026',
 
     // ── Trade message body ───────────────────────────────────────────────────
     tradeMessage: (iHave, youHave) =>
