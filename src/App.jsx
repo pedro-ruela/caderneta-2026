@@ -181,12 +181,15 @@ const App = () => {
   const teamProgress = useMemo(() => {
     const teams = {};
     stickers.forEach(s => {
-      if (!teams[s.team]) teams[s.team] = { total: 0, owned: 0 };
-      teams[s.team].total++;
-      if (activeOwnership[s.id]) teams[s.team].owned++;
+      if (!teams[s.team]) teams[s.team] = { team: s.team, items: [] };
+      teams[s.team].items.push({ id: s.id, number: s.number, isOwned: !!activeOwnership[s.id] });
     });
-    return Object.entries(teams)
-      .map(([team, stats]) => ({ team, ...stats, perc: ((stats.owned / stats.total) * 100).toFixed(0) }))
+    return Object.values(teams)
+      .map(t => {
+        const owned = t.items.filter(s => s.isOwned).length;
+        const total = t.items.length;
+        return { team: t.team, items: t.items, owned, total, perc: ((owned / total) * 100).toFixed(0) };
+      })
       .sort((a, b) => parseFloat(b.perc) - parseFloat(a.perc));
   }, [stickers, activeOwnership]);
 
@@ -965,29 +968,33 @@ const App = () => {
                   </div>
                 </div>
               ) : (
-                <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4" aria-label="Team progress">
-                  {teamProgress.map(({ team, total, owned, perc }) => (
-                    <li key={team} className="glass p-4 rounded-2xl border border-white/5 space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="font-black text-sm">{team}</span>
-                        <span className="text-[10px] font-bold text-muted-foreground" aria-label={`${owned} of ${total}`}>{owned}/{total}</span>
-                      </div>
-                      <div
-                        className="w-full h-1.5 bg-secondary rounded-full overflow-hidden"
-                        role="progressbar"
-                        aria-label={`${team} ${perc}%`}
-                        aria-valuenow={perc}
-                        aria-valuemin="0"
-                        aria-valuemax="100"
+                <ul className="glass rounded-2xl border border-white/5 divide-y divide-white/5" aria-label="Team progress">
+                  {teamProgress.map(({ team, items, owned, total, perc }) => (
+                    <li key={team} className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/2 transition-colors">
+                      <span
+                        className="w-10 text-[11px] font-black tracking-tight shrink-0 text-right"
+                        title={TEAM_NAMES[team] || team}
                       >
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${perc}%` }}
-                          transition={{ duration: 0.6, ease: 'easeOut' }}
-                          className={cn('h-full rounded-full', parseInt(perc) === 100 ? 'bg-green-400' : parseInt(perc) > 50 ? 'bg-primary' : 'bg-blue-400')}
-                        />
+                        {team}
+                      </span>
+                      <div className="flex flex-wrap gap-[3px] flex-1" role="img" aria-label={`${team}: ${owned} of ${total}`}>
+                        {items.map(s => (
+                          <span
+                            key={s.id}
+                            title={`${team} ${s.number}`}
+                            className={cn(
+                              'w-2.5 h-2.5 rounded-[3px] transition-colors',
+                              s.isOwned ? 'bg-green-500/75' : 'bg-white/10'
+                            )}
+                          />
+                        ))}
                       </div>
-                      <p className="text-[10px] font-bold text-right text-muted-foreground" aria-hidden="true">{perc}%</p>
+                      <span className="text-[10px] font-bold text-muted-foreground shrink-0 w-20 text-right tabular-nums">
+                        {owned}/{total}
+                        <span className={cn('ml-1', parseInt(perc) === 100 ? 'text-green-400' : 'text-muted-foreground')}>
+                          {perc}%
+                        </span>
+                      </span>
                     </li>
                   ))}
                 </ul>
