@@ -5,7 +5,7 @@ const n = config.ownerName;
 const translations = {
   en: {
     // ── Header ──────────────────────────────────────────────────────────────
-    subtitle: 'Community Edition',
+    subtitle: "Let's Trade!",
     ownerProgress: `${n}'s Progress`,
     forkGithub: 'FORK ON GITHUB',
     shareTracker: 'Share Tracker',
@@ -36,7 +36,7 @@ const translations = {
     pastePlaceholder: 'Type or paste (e.g. ARG 1, ARG 2, BRA 10...)',
     pasteTip: 'Tip: Enter "ARG 1" twice to count it as a duplicate.',
     option2: 'Option 2: Interactive Grid',
-    option3: 'Option 3: Upload CSV',
+    option3: 'Option 3: Upload CSV / XLSX',
 
     // ── Trade tab — comparison engine ────────────────────────────────────────
     comparisonEngine: 'Comparison Engine',
@@ -151,7 +151,7 @@ const translations = {
 
   pt: {
     // ── Header ──────────────────────────────────────────────────────────────
-    subtitle: 'Edição Comunitária',
+    subtitle: 'Vamos Trocar!',
     ownerProgress: `Progresso de ${n}`,
     forkGithub: 'FORK NO GITHUB',
     shareTracker: 'Partilhar Tracker',
@@ -182,7 +182,7 @@ const translations = {
     pastePlaceholder: 'Escreve ou cola (ex: ARG 1, ARG 2, BRA 10…)',
     pasteTip: 'Dica: Escreve "ARG 1" duas vezes para contar como repetido.',
     option2: 'Opção 2: Grelha Interativa',
-    option3: 'Opção 3: Carregar CSV',
+    option3: 'Opção 3: Carregar CSV / XLSX',
 
     // ── Trade tab — comparison engine ────────────────────────────────────────
     comparisonEngine: 'Motor de Comparação',

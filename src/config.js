@@ -22,6 +22,6 @@ export const config = {
   googleSheetTemplateUrl: 'https://docs.google.com/spreadsheets/d/1_q13F2KfncPjbYjFezvBJHugJ-_yY-qg9I1y9lhc3Bc/edit?usp=sharing',
 
   // ── Investment defaults ───────────────────────────────────────────────────
-  defaultPricePerPack: 1.20,
+  defaultPricePerPack: 1.50,
   defaultStickersPerPack: 7,
 };

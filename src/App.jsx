@@ -9,6 +9,7 @@ import { fetchStickerData } from './services/dataService';
 import { config } from './config';
 import translations from './i18n';
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -312,7 +313,7 @@ const App = () => {
     if (visitorList.length === 0) return { iHaveYouNeed: [], youHaveINeed: [] };
     const youHaveINeed = visitorList.filter(v => {
       const owner = stickers.find(s => s.id === `${v.team}-${v.number}`);
-      return owner && !owner.owned;
+      return owner && !owner.owned && v.duplicated > 0;
     });
     const iHaveYouNeed = stickers.filter(s => s.duplicated > 0 && !visitorStickers[s.id]);
     return { iHaveYouNeed, youHaveINeed };
@@ -323,14 +324,11 @@ const App = () => {
       const vd = visitorStickers[s.id];
       return { Team: s.team, Number: s.number, Page: s.page || '', Owned: vd ? 'TRUE' : 'FALSE', 'Duplicated Qty': vd?.duplicated ?? 0 };
     });
-    const csv  = Papa.unparse(rows);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href  = URL.createObjectURL(blob);
-    link.setAttribute('download', 'wc2026_collection.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch: 6 }, { wch: 8 }, { wch: 6 }, { wch: 8 }, { wch: 14 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Collection');
+    XLSX.writeFile(wb, 'wc2026_collection.xlsx');
     showToastMessage(t.toastDownloaded);
   };
 
@@ -649,28 +647,36 @@ const App = () => {
                         <input
                           type="file"
                           className="sr-only"
-                          accept=".csv"
+                          accept=".csv,.xlsx,.xls"
                           aria-label={t.option3}
                           onChange={(e) => {
                             const file = e.target.files[0];
                             if (!file) return;
-                            Papa.parse(file, {
-                              header: true,
-                              complete: (results) => {
-                                const parsed = {};
-                                results.data.forEach(r => {
-                                  const team  = (r.Team || r.SEL)?.toUpperCase();
-                                  const number = r.Number || r.NO;
-                                  const owned = r.Owned?.toLowerCase() === 'true';
-                                  const dups  = parseInt(r['Duplicated Qty'] || r.Duplicate) || 0;
-                                  if (team && number && owned) {
-                                    parsed[`${team}-${number}`] = { team, number, owned: true, duplicated: dups };
-                                  }
-                                });
-                                setVisitorStickers(parsed);
-                                showToastMessage(t.toastUploaded);
-                              },
-                            });
+                            const parseRows = (rows) => {
+                              const parsed = {};
+                              rows.forEach(r => {
+                                const team   = (r.Team || r.SEL)?.toString().toUpperCase();
+                                const number = (r.Number || r.NO)?.toString();
+                                const owned  = r.Owned?.toString().toLowerCase() === 'true';
+                                const dups   = parseInt(r['Duplicated Qty'] || r.Duplicate) || 0;
+                                if (team && number && owned) {
+                                  parsed[`${team}-${number}`] = { team, number, owned: true, duplicated: dups };
+                                }
+                              });
+                              setVisitorStickers(parsed);
+                              showToastMessage(t.toastUploaded);
+                            };
+                            if (file.name.match(/\.xlsx?$/i)) {
+                              const reader = new FileReader();
+                              reader.onload = (evt) => {
+                                const wb = XLSX.read(evt.target.result, { type: 'array' });
+                                const ws = wb.Sheets[wb.SheetNames[0]];
+                                parseRows(XLSX.utils.sheet_to_json(ws));
+                              };
+                              reader.readAsArrayBuffer(file);
+                            } else {
+                              Papa.parse(file, { header: true, complete: (r) => parseRows(r.data) });
+                            }
                           }}
                         />
                       </label>
