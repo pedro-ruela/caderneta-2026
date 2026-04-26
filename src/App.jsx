@@ -55,12 +55,20 @@ const App = () => {
         }
       });
       
-      // Merge with localStorage if it exists, or just use initial
+      // Merge with localStorage but ONLY for stickers that exist in the master list
       const saved = localStorage.getItem('visitor_collection');
       if (saved) {
         try {
           const parsedSaved = JSON.parse(saved);
-          setVisitorStickers({ ...initialCollection, ...parsedSaved });
+          const merged = { ...initialCollection };
+          
+          Object.keys(parsedSaved).forEach(key => {
+            // Only keep if it's a valid ID from the master list
+            if (data.some(s => `${s.team}-${s.number}` === key)) {
+              merged[key] = parsedSaved[key];
+            }
+          });
+          setVisitorStickers(merged);
         } catch (e) {
           setVisitorStickers(initialCollection);
         }

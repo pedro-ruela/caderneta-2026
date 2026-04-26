@@ -15,14 +15,19 @@ export const fetchStickerData = async () => {
         skipEmptyLines: true,
         complete: (results) => {
           const processedData = results.data
-            .filter(row => row.SEL && row.NO) // Ensure basic fields exist
+            .filter(row => {
+              const team = row.SEL?.trim();
+              const num = row.NO?.trim();
+              // Only include rows with a valid team code and a number
+              return team && team.length >= 3 && num && !isNaN(parseInt(num));
+            })
             .map(row => ({
-              team: row.SEL,
-              number: row.NO,
+              team: row.SEL.trim().toUpperCase(),
+              number: row.NO.trim(),
               page: row.Page,
-              owned: row.Own?.toLowerCase() === 'true',
+              owned: row.Own?.trim().toLowerCase() === 'true',
               duplicated: parseInt(row.Duplicate) || 0,
-              id: `${row.SEL}-${row.NO}`
+              id: `${row.SEL.trim().toUpperCase()}-${row.NO.trim()}`
             }));
           resolve(processedData);
         },
